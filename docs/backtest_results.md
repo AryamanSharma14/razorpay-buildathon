@@ -10,9 +10,9 @@
 | Metric | Value |
 |---|---|
 | Soft-decline rows evaluated | 2000 |
-| Simulated recoveries | 1021 |
-| **Soft-decline recovery rate** | **51.0%** |
-| Avg delay to recovery (hrs) | 30.0 |
+| Simulated recoveries | 1345 |
+| **Soft-decline recovery rate** | **67.2%** |
+| Avg delay to recovery (hrs) | 28.2 |
 | Hard declines retried | 0 (should be 0) |
 
 ## Honest Framing
