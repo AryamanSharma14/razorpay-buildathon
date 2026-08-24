@@ -42,8 +42,14 @@ start http://localhost:8000
 
 ```powershell
 python scripts/backtest.py
-# 67.2% soft-decline recovery rate on held-out test set (mechanism validation, synthetic data)
 ```
+
+> **⚠️ The previously reported 67.2% is superseded and should not be cited.** It was produced with
+> the retry search window capped at 48h. Published analysis of real failed payments shows >60% of
+> `insufficient_funds` recoveries occur 1–7 days after the decline, so that cap excluded most of the
+> real recovery mass. The window is being widened to 240h and the backtest re-run; the replacement
+> measurement reports lift against a baseline control rather than an unanchored rate.
+> See `docs/backtest_results.md` and `docs/research-brief.md`.
 
 ## Test
 
