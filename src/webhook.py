@@ -6,6 +6,7 @@ from datetime import datetime
 from fastapi import APIRouter, Request, Response
 from src import config, db
 from src.classifier import classify
+from src import scheduler as sched
 
 router = APIRouter()
 
@@ -75,6 +76,21 @@ def _handle_payment_failed(payload: dict):
 
     if result["type"] == "hard":
         db.log_audit(pid, "hard_stop", "no retry scheduled")
+        return
+
+    # soft: ML predict retry window, schedule
+    prediction = sched.predict_retry_window({
+        "method": entity.get("method", "card"),
+        "international": entity.get("international", False),
+        "error_reason": entity.get("error_reason", "payment_failed"),
+        "amount_paise": entity.get("amount", 0),
+    })
+    db.update_event(
+        pid,
+        confidence=prediction["confidence"],
+        top_features=json.dumps(prediction["top_features"]),
+    )
+    sched.schedule_retry(pid, prediction["delay_hours"])
 
 
 def _handle_link_paid(payload: dict):
