@@ -76,6 +76,17 @@ def stats():
     }
 
 
+@router.get("/backtest")
+def backtest():
+    import sys, os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        from scripts.backtest import run
+        return run(output_md=False)
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.delete("/retry/{payment_id}")
 def cancel_retry(payment_id: str):
     try:
