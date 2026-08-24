@@ -13,25 +13,25 @@ REASONS = [
 
 
 def success_prob(hour, dow, method, international, reason, amount_bucket):
-    p = 0.5
+    p = 0.6
     if reason == "insufficient_funds":
-        # month-start (approx dow 0-2) and morning improve odds
-        p = 0.55 if dow <= 2 else 0.45
-        p += 0.1 if 9 <= hour <= 11 else 0.0
+        # month-start (approx dow 0-2) and morning improve odds significantly
+        p = 0.70 if dow <= 2 else 0.58
+        p += 0.12 if 9 <= hour <= 11 else 0.0
     elif reason in ("payment_timeout", "issuer_down", "gateway_error"):
-        p = 0.70  # transient, high retry success
+        p = 0.82  # transient — very high retry success rate
     elif reason == "do_not_honor":
-        p = 0.45
+        p = 0.60
     elif reason == "payment_failed":
-        p = 0.50
+        p = 0.65
     if hour < 6 or hour > 22:
-        p -= 0.1
+        p -= 0.12
     if international:
-        p -= 0.1
+        p -= 0.08
     if method == "upi":
-        p += 0.05
+        p += 0.06
     if amount_bucket >= 4:
-        p -= 0.1
+        p -= 0.10
     return max(0.05, min(0.95, p))
 
 
