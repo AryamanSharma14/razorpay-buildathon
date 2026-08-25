@@ -18,6 +18,24 @@ PRESETS = {
 }
 
 
+def build_paid_payload(pid, amount):
+    return {
+        "event": "payment_link.paid",
+        "payload": {
+            "payment_link": {
+                "entity": {
+                    "id": f"plink_mock_{pid}",
+                    "amount": amount,
+                    "amount_paid": amount,
+                    "currency": "INR",
+                    "status": "paid",
+                    "notes": {"recovery_for": pid},
+                }
+            }
+        },
+    }
+
+
 def build_payload(source, step, reason, amount):
     pid = f"pay_test_{int(time.time())}"
     return {
@@ -39,6 +57,15 @@ def build_payload(source, step, reason, amount):
                     "error_source": source,
                     "error_step": step,
                     "error_reason": reason,
+                    "card": {
+                        "id": f"card_{pid}",
+                        "last4": "1111",
+                        "network": "Visa",
+                        "type": "debit",
+                        "sub_type": "consumer",
+                        "iin": "411111",
+                        "issuer": "HDFC",
+                    },
                     "created_at": int(time.time()),
                 }
             }
@@ -48,13 +75,23 @@ def build_payload(source, step, reason, amount):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--preset", choices=["soft", "hard"], default=None)
+    parser.add_argument("--preset", choices=["soft", "hard", "paid"], default=None)
+    parser.add_argument("--pid", default=None)
     parser.add_argument("--reason", default="insufficient_funds")
     parser.add_argument("--source", default="bank")
     parser.add_argument("--step", default="payment_authorization")
     parser.add_argument("--amount", type=int, default=50000)
     parser.add_argument("--url", default="http://localhost:8000/webhook/razorpay?skip_sig=1")
     args = parser.parse_args()
+
+    if args.preset == "paid":
+        if not args.pid:
+            parser.error("--preset paid requires --pid PAY_xxx")
+        payload = build_paid_payload(args.pid, args.amount)
+        print(f"Firing payment_link.paid for {args.pid}")
+        r = httpx.post(args.url, json=payload)
+        print(f"Response: {r.status_code} — {r.text}")
+        return
 
     if args.preset:
         p = PRESETS[args.preset]

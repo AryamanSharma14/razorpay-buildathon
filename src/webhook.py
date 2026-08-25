@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Response
-from src import config, db
+from src import compliance, config, db
 from src.classifier import classify
 from src import scheduler as sched
 
@@ -55,6 +55,7 @@ def _handle_payment_failed(payload: dict):
         entity.get("error_reason", ""),
     )
 
+    card = entity.get("card") or {}
     row = {
         "payment_id": pid,
         "order_id": entity.get("order_id"),
@@ -66,10 +67,17 @@ def _handle_payment_failed(payload: dict):
         "error_step": entity.get("error_step"),
         "error_reason": entity.get("error_reason"),
         "error_code": entity.get("error_code"),
+        "method": entity.get("method", "card"),
+        "international": int(bool(entity.get("international"))),
+        "card_network": card.get("network"),
+        "card_type": card.get("type"),
+        "card_issuer": card.get("issuer"),
+        "card_iin": card.get("iin"),
         "classification": result["type"],
         "classify_reason": result["reason"],
         "raw_payload": json.dumps(payload),
     }
+    row["credential"] = compliance.credential_of({**row})
 
     db.insert_event(row)
     db.log_audit(pid, "classified", result["reason"])
@@ -78,12 +86,20 @@ def _handle_payment_failed(payload: dict):
         db.log_audit(pid, "hard_stop", "no retry scheduled")
         return
 
+    allowed, why = compliance.check_retry_allowed(row)
+    if not allowed:
+        db.log_audit(pid, "network_cap_block", why)
+        return
+
     # soft: ML predict retry window, schedule
     prediction = sched.predict_retry_window({
-        "method": entity.get("method", "card"),
-        "international": entity.get("international", False),
+        "method": row["method"],
+        "international": row["international"],
         "error_reason": entity.get("error_reason", "payment_failed"),
         "amount_paise": entity.get("amount", 0),
+        "card_network": row["card_network"],
+        "card_type": row["card_type"],
+        "card_issuer": row["card_issuer"],
     })
     db.update_event(
         pid,
