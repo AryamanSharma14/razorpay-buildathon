@@ -20,25 +20,22 @@ def load_model():
         _model_bundle = None
 
 
-def _encode_method(val: str):
-    enc = _model_bundle["method_enc"]
-    try:
-        return enc.transform([val])[0]
-    except ValueError:
-        return enc.transform(["card"])[0]
+# >60% of insufficient-funds recoveries land 1-7 days out and 90% within 10 days, so a
+# 48h horizon structurally excludes most of the recovery mass. See docs/research-brief.md.
+MAX_HORIZON_HOURS = 240
 
 
-def _encode_reason(val: str):
-    enc = _model_bundle["reason_enc"]
+def _encode(enc_key: str, val: str, fallback: str):
+    enc = _model_bundle[enc_key]
     try:
-        return enc.transform([val])[0]
+        return enc.transform([str(val)])[0]
     except ValueError:
-        return enc.transform(["payment_failed"])[0]
+        return enc.transform([fallback])[0]
 
 
 def predict_retry_window(features: dict) -> dict:
     """
-    features: {method, international, error_reason, amount_paise}
+    features: {method, international, error_reason, amount_paise, card_network, card_type, card_issuer}
     Returns {delay_hours, confidence, top_features}
     """
     if _model_bundle is None:
@@ -46,39 +43,34 @@ def predict_retry_window(features: dict) -> dict:
 
     clf = _model_bundle["model"]
     feat_names = _model_bundle["features"]
-    importances = clf.feature_importances_
 
-    method_enc = _encode_method(features.get("method", "card"))
-    reason_enc = _encode_reason(features.get("error_reason", "payment_failed"))
+    method = features.get("method", "card")
+    is_card = method == "card"
+    method_enc = _encode("method_enc", method, "card")
+    reason_enc = _encode("reason_enc", features.get("error_reason", "payment_failed"), "payment_failed")
+    network_enc = _encode("card_network_enc", features.get("card_network") or ("Visa" if is_card else "none"), "none")
+    ctype_enc = _encode("card_type_enc", features.get("card_type") or ("credit" if is_card else "none"), "none")
+    issuer_enc = _encode("card_issuer_enc", features.get("card_issuer") or ("OTHER" if is_card else "none"), "none")
     intl = int(features.get("international", False))
     ab = _amount_bucket(features.get("amount_paise", 0))
 
     now = datetime.utcnow()
-    best_hour_offset = 1
-    best_prob = 0.0
+    hours = np.arange(1, MAX_HORIZON_HOURS + 1)
+    futures = [now + timedelta(hours=int(h)) for h in hours]
+    rows = np.array([[
+        f.hour, f.weekday(), int(h), method_enc, intl, reason_enc, ab,
+        network_enc, ctype_enc, issuer_enc,
+    ] for h, f in zip(hours, futures)])
 
-    for h in range(1, 49):
-        future = now + timedelta(hours=h)
-        row = np.array([[
-            future.hour,
-            future.weekday(),
-            method_enc,
-            intl,
-            reason_enc,
-            ab,
-        ]])
-        prob = clf.predict_proba(row)[0][1]
-        if prob > best_prob:
-            best_prob = prob
-            best_hour_offset = h
+    probs = clf.predict_proba(rows)[:, 1]
+    best_idx = int(probs.argmax())
 
-    top3 = sorted(zip(feat_names, importances), key=lambda x: -x[1])[:3]
-    top_features = [[name, round(float(imp), 4)] for name, imp in top3]
+    top3 = sorted(zip(feat_names, clf.feature_importances_), key=lambda x: -x[1])[:3]
 
     return {
-        "delay_hours": best_hour_offset,
-        "confidence": round(float(best_prob), 4),
-        "top_features": top_features,
+        "delay_hours": int(hours[best_idx]),
+        "confidence": round(float(probs[best_idx]), 4),
+        "top_features": [[name, round(float(imp), 4)] for name, imp in top3],
     }
 
 

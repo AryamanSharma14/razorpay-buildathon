@@ -44,12 +44,21 @@ start http://localhost:8000
 python scripts/backtest.py
 ```
 
-> **⚠️ The previously reported 67.2% is superseded and should not be cited.** It was produced with
-> the retry search window capped at 48h. Published analysis of real failed payments shows >60% of
-> `insufficient_funds` recoveries occur 1–7 days after the decline, so that cap excluded most of the
-> real recovery mass. The window is being widened to 240h and the backtest re-run; the replacement
-> measurement reports lift against a baseline control rather than an unanchored rate.
-> See `docs/backtest_results.md` and `docs/research-brief.md`.
+| Policy | Recovery rate |
+|---|---|
+| Fixed 24h retry (control) | 45.5% |
+| ML-timed (ours) | **61.1%** |
+| **Lift** | **+15.6 pts** |
+
+> **Synthetic data.** The backtest's ground truth is the same probability function that generated the
+> training labels, so this is a *circular* validation: it shows the scheduler finds the optimum the
+> data encodes, not that it recovers 61% of real payments. The lift over the control is the
+> meaningful figure; the absolute rate is an artifact of the generator's coefficients.
+> Published real-world bands for comparison: retries-only ~30%, single-merchant smart retry ~53%,
+> best-in-class 65–85%.
+>
+> The earlier 67.2% figure is retired — measured without a control, and before the model had any
+> elapsed-time feature. See `docs/backtest_results.md` and `docs/research-brief.md`.
 
 ## Test
 

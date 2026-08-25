@@ -17,3 +17,11 @@ Thumbs.db
 .idea/
 .vscode/
 .pytest_cache/
+
+# internal planning / AI-process docs — not for public submission repo
+CLAUDE.md
+plan.md
+.claude/
+docs/win-plan.md
+docs/research-brief.md
+docs/decisions/
