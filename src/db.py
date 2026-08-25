@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS events (
   currency TEXT DEFAULT 'INR',
   email TEXT, contact TEXT,
   error_source TEXT, error_step TEXT, error_reason TEXT, error_code TEXT,
+  method TEXT, international INTEGER DEFAULT 0,
+  card_network TEXT, card_type TEXT, card_issuer TEXT, card_iin TEXT,
+  credential TEXT,
+  chosen_rail TEXT,
   classification TEXT,
   classify_reason TEXT,
   confidence REAL,
@@ -40,7 +44,40 @@ CREATE TABLE IF NOT EXISTS audit_log (
   payment_id TEXT, action TEXT, detail TEXT,
   ts TEXT DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS network_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  credential TEXT NOT NULL,
+  network TEXT,
+  payment_id TEXT,
+  ts TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_network_attempts_cred ON network_attempts(credential, ts);
         """)
+        # Databases created before the card/compliance columns existed need them backfilled;
+        # CREATE TABLE IF NOT EXISTS silently leaves an older schema in place.
+        have = {r["name"] for r in conn.execute("PRAGMA table_info(events)")}
+        for col in ("method TEXT", "international INTEGER DEFAULT 0", "card_network TEXT",
+                    "card_type TEXT", "card_issuer TEXT", "card_iin TEXT", "credential TEXT",
+                    "chosen_rail TEXT"):
+            if col.split()[0] not in have:
+                conn.execute(f"ALTER TABLE events ADD COLUMN {col}")
+
+
+def record_network_attempt(credential: str, network: str, payment_id: str):
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO network_attempts (credential, network, payment_id) VALUES (?, ?, ?)",
+            (credential, network, payment_id)
+        )
+
+
+def count_network_attempts(credential: str, hours: int) -> int:
+    with _conn() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM network_attempts WHERE credential=? "
+            "AND ts >= datetime('now', ?)",
+            (credential, f"-{hours} hours")
+        ).fetchone()[0]
 
 def insert_event(data: dict):
     cols = ", ".join(data.keys())

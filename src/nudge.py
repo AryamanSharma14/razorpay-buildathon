@@ -34,9 +34,13 @@ def generate_message(event: dict, link_url: str) -> dict:
         )
         amount_inr = (event.get("amount_paise") or 0) / 100
 
+        rail_line = ""
+        if event.get("chosen_rail") == "upi":
+            rail_line = "\nSuggest paying via UPI this time (their card is failing). Frame it as an easier payment option, not a discount or incentive."
+
         prompt = f"""A customer's payment of INR {amount_inr:.0f} failed due to {reason_human}.
 Generate a recovery message to send via WhatsApp/SMS/email encouraging them to retry.
-Retry link: {link_url}
+Retry link: {link_url}{rail_line}
 
 Respond in JSON with exactly two keys:
 - "message": short customer-facing nudge (empathetic, no technical jargon, under 160 chars, include the link)
