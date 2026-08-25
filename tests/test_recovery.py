@@ -1,10 +1,11 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from src import db, config
-from src.recovery import run_recovery, create_payment_link
+from src.recovery import run_recovery, create_payment_link, select_rail
 
 
-def _make_event(payment_id="pay_test_001", classification="soft", recovered=0, cancelled=0, attempts=0):
+def _make_event(payment_id="pay_test_001", classification="soft", recovered=0, cancelled=0,
+                attempts=0, method="card", error_reason="insufficient_funds"):
     return {
         "payment_id": payment_id,
         "classification": classification,
@@ -15,7 +16,8 @@ def _make_event(payment_id="pay_test_001", classification="soft", recovered=0, c
         "currency": "INR",
         "email": "test@example.com",
         "contact": "+919999999999",
-        "error_reason": "insufficient_funds",
+        "method": method,
+        "error_reason": error_reason,
     }
 
 
@@ -59,11 +61,58 @@ def test_demo_mode_returns_mock_link():
         config.RAZORPAY_KEY_ID = orig_key
 
 
+def test_select_rail_card_insufficient_funds_routes_upi():
+    assert select_rail(_make_event(method="card", error_reason="insufficient_funds")) == "upi"
+    assert select_rail(_make_event(method="card", error_reason="issuer_down")) == "upi"
+
+
+def test_select_rail_card_generic_failure_stays_card():
+    assert select_rail(_make_event(method="card", error_reason="payment_failed")) == "card"
+
+
+def test_select_rail_non_card_unchanged():
+    assert select_rail(_make_event(method="upi", error_reason="insufficient_funds")) == "upi"
+    assert select_rail(_make_event(method="netbanking", error_reason="insufficient_funds")) == "netbanking"
+
+
+def test_run_recovery_routes_card_to_upi_and_audits():
+    event = _make_event(method="card", error_reason="insufficient_funds")
+    with patch("src.db.get_event", return_value=event), \
+         patch("src.db.update_event") as mock_update, \
+         patch("src.db.log_audit") as mock_audit, \
+         patch("src.db.count_network_attempts", return_value=0), \
+         patch("src.db.record_network_attempt"), \
+         patch("src.recovery.create_payment_link", return_value={"id": "pl1", "short_url": "https://x"}), \
+         patch("src.nudge.send", return_value="mock"), \
+         patch("src.scheduler.predict_retry_window", return_value={"delay_hours": 2, "confidence": 0.7, "top_features": []}), \
+         patch("src.scheduler.schedule_retry"):
+        run_recovery("pay_test_001")
+        actions = [c[0][1] for c in mock_audit.call_args_list]
+        assert "rail_routed" in actions
+        assert any(kw.get("chosen_rail") == "upi" for _, kw in
+                   [(c[0], c[1]) for c in mock_update.call_args_list])
+
+
+def test_run_recovery_hard_decline_never_routes():
+    event = _make_event(classification="hard", method="card", error_reason="insufficient_funds")
+    with patch("src.db.get_event", return_value=event), \
+         patch("src.db.update_event") as mock_update, \
+         patch("src.db.log_audit") as mock_audit:
+        run_recovery("pay_test_001")
+        actions = [c[0][1] for c in mock_audit.call_args_list]
+        assert "hard_guard" in actions
+        assert "rail_routed" not in actions
+        assert not any(kw.get("chosen_rail") for _, kw in
+                       [(c[0], c[1]) for c in mock_update.call_args_list])
+
+
 def test_cancel_sets_flag():
     event = _make_event()
     with patch("src.db.get_event", return_value=event), \
          patch("src.db.update_event") as mock_update, \
          patch("src.db.log_audit"), \
+         patch("src.db.count_network_attempts", return_value=0), \
+         patch("src.db.record_network_attempt"), \
          patch("src.recovery.create_payment_link", return_value={"id": "pl1", "short_url": "https://x"}), \
          patch("src.nudge.send", return_value="mock"), \
          patch("src.scheduler.predict_retry_window", return_value={"delay_hours": 2, "confidence": 0.7, "top_features": []}), \
