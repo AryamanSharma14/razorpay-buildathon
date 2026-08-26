@@ -18,7 +18,8 @@ def test_credential_key_falls_back_to_payment_id_without_iin():
 
 
 def test_visa_allows_under_twenty_in_thirty_days():
-    with patch("src.db.count_network_attempts", return_value=19):
+    with patch("src.db.count_network_attempts", return_value=19), \
+         patch("src.db.last_attempt_ts", return_value=None):
         assert compliance.check_retry_allowed(_card())[0] is True
 
 
@@ -46,6 +47,7 @@ def test_recovery_blocked_when_cap_reached():
     with patch("src.db.get_event", return_value=event), \
          patch("src.db.log_audit") as audit, \
          patch("src.db.count_network_attempts", return_value=20), \
+         patch("src.db.last_attempt_ts", return_value=None), \
          patch("src.recovery.create_payment_link") as link:
         run_recovery("pay_c1")
         assert not link.called

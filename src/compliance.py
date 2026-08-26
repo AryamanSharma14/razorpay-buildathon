@@ -5,7 +5,11 @@ Mastercard: 10 per 24h and 35 per 30 days, enforced via Transaction Processing E
 Unknown networks fall back to the strictest published limits.
 See docs/research-brief.md.
 """
+from datetime import datetime, timedelta
 from src import db
+
+# Min hours between retries on same credential — prevents card-testing fraud signal.
+MIN_RETRY_SPACING_HOURS = 24
 
 # (hours, max_attempts) pairs per network
 CAPS = {
@@ -41,7 +45,33 @@ def check_retry_allowed(event: dict) -> tuple[bool, str]:
             window = "24h" if hours == 24 else "30d"
             return False, f"{network or 'unknown'} cap reached: {used}/{limit} in {window}"
 
+    # Card-testing spacing: block if last attempt too recent
+    last_ts = db.last_attempt_ts(cred)
+    if last_ts:
+        last_dt = datetime.fromisoformat(last_ts).replace(tzinfo=None)
+        if datetime.utcnow() - last_dt < timedelta(hours=MIN_RETRY_SPACING_HOURS):
+            return False, f"cardtesting_spacing_block: last attempt {last_ts}"
+
     return True, f"within {network or 'unknown'} caps"
+
+
+def check_upi_mandate_allowed(event: dict) -> tuple[bool, str]:
+    """NPCI OC-98: UPI mandate failures allow max 1 re-presentation per billing cycle (30d).
+    A UPI mandate failure is: method=upi and error_reason indicates mandate/subscription context."""
+    if event.get("method") != "upi":
+        return True, "not a UPI payment"
+
+    mandate_signals = {"upi_mandate_failed", "mandate_execution_failed", "debit_failed"}
+    reason = (event.get("error_reason") or "").lower()
+    if not any(sig in reason for sig in mandate_signals):
+        return True, "not a mandate failure"
+
+    cred = credential_of(event)
+    # Mandate: max 1 retry per 30-day window
+    used = db.count_network_attempts(cred, 720)
+    if used >= 1:
+        return False, f"upi_mandate_cycle_block: {used} attempt(s) in billing cycle (NPCI OC-98)"
+    return True, "upi mandate retry allowed"
 
 
 def record_attempt(event: dict):

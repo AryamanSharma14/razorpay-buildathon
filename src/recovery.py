@@ -8,11 +8,41 @@ from src import compliance, config, db
 from src import scheduler as sched
 
 MAX_ATTEMPTS = 3
+_CLAUDE_DECIDE_PROMPT = """You are a payment recovery decision engine. Given payment context, decide the recovery action.
+
+Context: {context}
+
+Rules:
+- "abandon": clear trajectory escalation (soft→hard), amount<₹100 (not worth cost), or 3rd+ attempt failed
+- "reroute": card fail on fundable reason AND UPI not yet tried → route to upi
+- "retry": standard soft decline, retry on same rail
+- "escalate": stuck trajectory (same error 3×) → try different channel only
+
+Respond ONLY as JSON (no markdown): {{"action": "retry"|"reroute"|"escalate"|"abandon", "rail": "card"|"upi"|null, "reasoning": "one sentence", "confidence": 0.0-1.0}}"""
 RAZORPAY_LINKS_URL = "https://api.razorpay.com/v1/payment_links"
 
 # Card declines on a fundable/issuer reason: route recovery to UPI Autopay — a different
 # rail off the failing card network. Hard declines never reach rail selection (guarded upstream).
 RAIL_ROUTABLE = {"insufficient_funds", "issuer_down", "do_not_honor"}
+
+
+def claude_decide(context: dict) -> dict:
+    """Call Claude for a structured recovery decision. Falls back to None on error/no key."""
+    if not config.ANTHROPIC_API_KEY:
+        return None  # ML-only path
+    try:
+        import anthropic, json as _json
+        client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=256,
+            messages=[{"role": "user", "content": _CLAUDE_DECIDE_PROMPT.format(
+                context=_json.dumps(context)
+            )}],
+        )
+        return _json.loads(resp.content[0].text.strip())
+    except Exception:
+        return None
 
 
 def select_rail(event: dict) -> str:
@@ -80,6 +110,50 @@ def run_recovery(payment_id: str):
     if not allowed:
         db.log_audit(payment_id, "network_cap_block", why)
         return
+
+    upi_ok, upi_why = compliance.check_upi_mandate_allowed(event)
+    if not upi_ok:
+        db.log_audit(payment_id, "upi_mandate_cycle_block", upi_why)
+        return
+
+    from src.classifier import classify_trajectory
+    trajectory = classify_trajectory(db.get_decline_history(payment_id))
+    if trajectory == "trajectory_escalating":
+        db.log_audit(payment_id, "trajectory_block", "escalating decline pattern — stopping retry")
+        return
+
+    # EV guard: skip if expected value negative across all channels
+    amount_inr = (event.get("amount_paise") or 0) / 100
+    confidence = event.get("confidence") or 0.5
+    min_cost = min(config.CHANNEL_COSTS_INR.values())
+    ev = confidence * amount_inr - min_cost
+    if ev <= 0:
+        arithmetic = f"EV={confidence:.2f}*{amount_inr:.2f}-{min_cost:.2f}={ev:.2f}<=0"
+        db.log_audit(payment_id, "skipped_uneconomic", arithmetic)
+        return
+
+    # Claude decision engine — structured action decision before committing attempt
+    ctx = {
+        "decline_reason": event.get("error_reason"),
+        "attempt_number": (event.get("attempts") or 0) + 1,
+        "trajectory": trajectory,
+        "card_network": event.get("card_network"),
+        "issuer": event.get("card_issuer"),
+        "amount_inr": amount_inr,
+        "ev_score": round(ev, 2),
+        "method": event.get("method"),
+    }
+    claude = claude_decide(ctx)
+    if claude:
+        db.update_event(payment_id,
+                        claude_decision=claude.get("action"),
+                        claude_reasoning=claude.get("reasoning"))
+        db.log_audit(payment_id, "claude_decision",
+                     f"action={claude.get('action')} conf={claude.get('confidence')}")
+        if claude.get("action") == "abandon":
+            db.log_audit(payment_id, "claude_abandon", claude.get("reasoning", ""))
+            return
+
     compliance.record_attempt(event)
 
     attempts = (event.get("attempts") or 0) + 1
@@ -87,6 +161,10 @@ def run_recovery(payment_id: str):
     db.log_audit(payment_id, "recovery_attempt", f"attempt={attempts}")
 
     rail = select_rail(event)
+    # Claude reroute override
+    if claude and claude.get("action") == "reroute" and claude.get("rail"):
+        rail = claude["rail"]
+        db.log_audit(payment_id, "claude_reroute", f"claude overrides rail to {rail}")
     event["chosen_rail"] = rail
     if rail != (event.get("method") or "card"):
         db.update_event(payment_id, chosen_rail=rail)
@@ -118,6 +196,9 @@ def run_recovery(payment_id: str):
             "card_type": event.get("card_type"),
             "card_issuer": event.get("card_issuer"),
         })
-        sched.schedule_retry(payment_id, prediction["delay_hours"])
+        sched.schedule_retry(payment_id, prediction["delay_hours"],
+                             error_reason=event.get("error_reason", ""),
+                             issuer=event.get("card_issuer") or "",
+                             method=event.get("method") or "card")
     else:
         db.log_audit(payment_id, "give_up", f"max attempts ({MAX_ATTEMPTS}) reached")

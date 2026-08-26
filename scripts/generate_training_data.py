@@ -32,6 +32,11 @@ _FLAT_CURVE = [(24, 0.85), (48, 1.00), (120, 0.85), (168, 0.65), (240, 0.45)]
 _ISSUER_LIFT = {"HDFC": 0.04, "ICICI": 0.03, "SBIN": -0.03, "UTIB": 0.01,
                 "KKBK": 0.02, "PUNB": -0.05, "OTHER": 0.0}
 
+# Salary/payday deposit windows: Friday (dow=4), and 1st/15th of month (simulated as is_payday flag).
+# Omesta study: payday-aligned retries show 3.2x recovery vs aggregate ML for insufficient_funds.
+# We encode this as a binary feature so the model can learn it.
+_PAYDAY_DOWS = {4}  # Friday
+
 
 def _curve_for(reason):
     if reason == "insufficient_funds":
@@ -49,11 +54,15 @@ def time_multiplier(reason, hours_since):
 
 
 def success_prob(hour, dow, method, international, reason, amount_bucket,
-                 hours_since=24, network="Visa", card_type="credit", issuer="OTHER"):
+                 hours_since=24, network="Visa", card_type="credit", issuer="OTHER",
+                 is_payday=0):
     p = 0.6
     if reason == "insufficient_funds":
         p = 0.70 if dow <= 2 else 0.58
         p += 0.12 if 9 <= hour <= 11 else 0.0
+        # Salary/deposit lands on payday — card balance refills, making retry more likely.
+        if is_payday:
+            p += 0.18
     elif reason in ("payment_timeout", "issuer_down", "gateway_error"):
         p = 0.82
     elif reason == "do_not_honor":
@@ -116,18 +125,21 @@ def main():
         card_type = random.choice(CARD_TYPES) if method == "card" else "none"
         issuer = random.choice(ISSUERS) if method == "card" else "none"
 
+        # Payday: Friday or 1st/15th of month. 1st/15th are ~2/30 days each → ~13% combined.
+        # Encode Friday from dow; 1st/15th simulated as independent flag.
+        is_payday = int(dow in _PAYDAY_DOWS or random.random() < 0.13)
         p = success_prob(hour, dow, method, intl, reason, ab,
-                         hours_since, network, card_type, issuer)
+                         hours_since, network, card_type, issuer, is_payday)
         label = 1 if random.random() < p else 0
         rows.append([hour, dow, hours_since, method, intl, reason, ab,
-                     network, card_type, issuer, label])
+                     network, card_type, issuer, is_payday, label])
 
     os.makedirs("data", exist_ok=True)
     with open("data/training.csv", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["hour_of_day", "day_of_week", "hours_since_failure", "method",
                     "international", "error_reason", "amount_bucket",
-                    "card_network", "card_type", "card_issuer", "retry_success"])
+                    "card_network", "card_type", "card_issuer", "is_payday", "retry_success"])
         w.writerows(rows)
 
     print(f"Generated {len(rows)} rows -> data/training.csv")

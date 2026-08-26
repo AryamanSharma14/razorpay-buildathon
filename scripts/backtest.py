@@ -1,7 +1,7 @@
 """
-Backtest the ML retry predictor on held-out test data.
-Methodology: uses the SAME probability function from generate_training_data.py as ground truth.
-This validates the orchestration mechanism, not a real-world recovery rate.
+Multi-policy backtest. Same circular-validation caveat applies: ground truth is the
+same probability function used to generate training labels. Proves scheduler beats
+fixed-delay on this distribution; not evidence about real merchants.
 """
 import sys
 import os
@@ -11,116 +11,225 @@ import random
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import joblib
-
 import numpy as np
 from datetime import datetime, timedelta
 
 from scripts.generate_training_data import success_prob
 
 MAX_HORIZON_HOURS = 240
-NAIVE_DELAY_HOURS = 24
-
 random.seed(42)
+
+# Network fine per excess attempt (declared assumption — domestic INR equivalent)
+VISA_CAP_30D = 20
+VISA_FINE_INR = 8.0       # ~$0.10 domestic
+MC_CAP_24H = 10
+MC_FINE_INR = 20.0        # ~$0.25 cross-border proxy
+
+
+def _enc(bundle, key, v, fallback):
+    e = bundle[key]
+    try:
+        return e.transform([str(v)])[0]
+    except Exception:
+        return e.transform([fallback])[0]
+
+
+def _ml_best_hour(clf, bundle, row, now):
+    hours = np.arange(1, MAX_HORIZON_HOURS + 1)
+    futures = [now + timedelta(hours=int(h)) for h in hours]
+    reason, method = row["error_reason"], row["method"]
+    intl, amt = int(row["international"]), int(row["amount_bucket"])
+    network, ctype, issuer = row["card_network"], row["card_type"], row["card_issuer"]
+    base = [
+        _enc(bundle, "method_enc", method, "card"), intl,
+        _enc(bundle, "reason_enc", reason, "payment_failed"), amt,
+        _enc(bundle, "card_network_enc", network, "none"),
+        _enc(bundle, "card_type_enc", ctype, "none"),
+        _enc(bundle, "card_issuer_enc", issuer, "none"),
+    ]
+    X = np.array([
+        [f.hour, f.weekday(), int(h)] + base + [int(f.weekday() == 4 or f.day in (1, 15))]
+        for h, f in zip(hours, futures)
+    ])
+    return int(hours[int(clf.predict_proba(X)[:, 1].argmax())])
+
+
+def _snap_payday(delay_h, reason, now):
+    """Snap insufficient_funds to next payday window (mirrors scheduler.py logic)."""
+    if reason != "insufficient_funds":
+        return delay_h
+    fire = now + timedelta(hours=delay_h)
+    if fire.weekday() == 4 or fire.day in (1, 15):
+        return delay_h
+    for d in range(1, 36):
+        cand = fire + timedelta(days=d)
+        if cand.weekday() == 4 or cand.day in (1, 15):
+            return delay_h + d * 24
+    return delay_h
+
+
+def _simulate(delays_fn, df_test, now):
+    """
+    delays_fn(row) → list of delay hours to attempt (in order).
+    Returns: hits, total_attempts, fines_inr, revenues_inr
+    """
+    hits = 0
+    total_attempts = 0
+    fines_inr = 0.0
+
+    for _, row in df_test.iterrows():
+        reason, method = row["error_reason"], row["method"]
+        intl, amt = int(row["international"]), int(row["amount_bucket"])
+        network, ctype, issuer = row["card_network"], row["card_type"], row["card_issuer"]
+        amount_paise = {0: 5000, 1: 25000, 2: 100000, 3: 500000, 4: 2000000}.get(amt, 50000)
+
+        delays = delays_fn(row)
+        attempt_count = 0
+        recovered = False
+
+        for delay in delays:
+            total_attempts += 1
+            attempt_count += 1
+            t = now + timedelta(hours=delay)
+            p = success_prob(t.hour, t.weekday(), method, bool(intl), reason, amt,
+                             delay, network, ctype, issuer,
+                             is_payday=int(t.weekday() == 4 or t.day in (1, 15)))
+            if random.random() < p:
+                hits += 1
+                recovered = True
+                break
+
+        # Network fines: per-payment attempt count over cap (simplified: per-credential)
+        net = (network or "").lower()
+        if method == "card":
+            cap = VISA_CAP_30D if net == "visa" else MC_CAP_24H
+            fine_rate = VISA_FINE_INR if net == "visa" else MC_FINE_INR
+            excess = max(0, attempt_count - cap)
+            fines_inr += excess * fine_rate
+
+    return hits, total_attempts, fines_inr
 
 
 def run(output_md=True):
     df = pd.read_csv("data/training.csv")
     _, df_test = train_test_split(df, test_size=0.2, random_state=42)
 
-    bundle = joblib.load("models/retry_model.pkl")
-    clf = bundle["model"]
-
-    def enc(key, v, fallback):
-        e = bundle[key]
-        try:
-            return e.transform([str(v)])[0]
-        except Exception:
-            return e.transform([fallback])[0]
+    try:
+        bundle = joblib.load("models/retry_model.pkl")
+        clf = bundle["model"]
+        has_model = True
+    except FileNotFoundError:
+        has_model = False
 
     now = datetime.utcnow()
-    hours = np.arange(1, MAX_HORIZON_HOURS + 1)
-    futures = [now + timedelta(hours=int(h)) for h in hours]
-
-    ours_hits, naive_hits = 0, 0
-    ours_delays = []
-
-    for _, row in df_test.iterrows():
-        reason, method = row["error_reason"], row["method"]
-        intl, amt = int(row["international"]), int(row["amount_bucket"])
-        network, ctype, issuer = row["card_network"], row["card_type"], row["card_issuer"]
-
-        base = [enc("method_enc", method, "card"), intl,
-                enc("reason_enc", reason, "payment_failed"), amt,
-                enc("card_network_enc", network, "none"),
-                enc("card_type_enc", ctype, "none"),
-                enc("card_issuer_enc", issuer, "none")]
-
-        X = np.array([[f.hour, f.weekday(), int(h)] + base for h, f in zip(hours, futures)])
-        best_h = int(hours[int(clf.predict_proba(X)[:, 1].argmax())])
-
-        for delay, is_ours in ((best_h, True), (NAIVE_DELAY_HOURS, False)):
-            t = now + timedelta(hours=delay)
-            p = success_prob(t.hour, t.weekday(), method, bool(intl), reason, amt,
-                             delay, network, ctype, issuer)
-            if random.random() < p:
-                if is_ours:
-                    ours_hits += 1
-                    ours_delays.append(delay)
-                else:
-                    naive_hits += 1
-
     n = len(df_test)
-    ours_rate = ours_hits / n * 100
-    naive_rate = naive_hits / n * 100
-    avg_delay = sum(ours_delays) / len(ours_delays) if ours_delays else 0
 
-    lines = [
-        "# Backtest Results",
-        "",
-        "## Methodology",
-        "- Dataset: held-out 20% test split (2,000 rows), fixed `random_state=42`",
-        "- Ground truth: same probability function used to generate training labels — this is a",
-        "  **circular validation**. It proves the scheduler finds the optimum the data encodes;",
-        "  it is not evidence about real merchants.",
-        f"- Search horizon: 1–{MAX_HORIZON_HOURS}h (widened from 48h — see Known defects in CLAUDE.md)",
-        f"- Control policy: fixed {NAIVE_DELAY_HOURS}h retry, what most merchants run",
-        "- **Synthetic data. Every number below is labelled synthetic and must stay that way.**",
-        "",
-        "## Results",
-        "| Policy | Recoveries | Rate |",
-        "|---|---|---|",
-        f"| Fixed {NAIVE_DELAY_HOURS}h retry (control) | {naive_hits} / {n} | {naive_rate:.1f}% |",
-        f"| **ML-timed (ours)** | **{ours_hits} / {n}** | **{ours_rate:.1f}%** |",
-        f"| **Lift over control** | | **{ours_rate - naive_rate:+.1f} pts** |",
-        "",
-        f"Average delay to chosen retry window: {avg_delay:.1f}h",
-        "",
-        "## Honest Framing",
-        "These rates come from synthetic probability functions, not real merchant data.",
-        "The lift figure is the meaningful one: it shows the scheduler beats a fixed-delay",
-        "policy on the same generated distribution. Absolute rates are an artifact of the",
-        "generator's coefficients and should not be quoted as a revenue promise.",
-        "Published real-world bands for comparison: retries-only ~30%, single-merchant smart",
-        "retry ~53%, best-in-class 65–85%.",
+    def razorpay_default(row):
+        # 3 reminders, retry at ~24h (next day), slots 11AM or 15PM only
+        return [24, 48, 72]
+
+    def naive_24h(row):
+        return [24]
+
+    def no_retry(row):
+        return []
+
+    def retry_aggressive(row):
+        # 25 retries every 12h — blows Visa 20/30d cap, incurs fines per excess attempt
+        return [12 * i for i in range(1, 26)]
+
+    def ours(row):
+        # 3 attempts like razorpay_default, but first attempt ML-timed + payday-snapped.
+        # Subsequent attempts follow 24h after first (same budget, better initial timing).
+        if not has_model:
+            return [24, 48, 72]
+        delay = _ml_best_hour(clf, bundle, row, now)
+        delay = _snap_payday(delay, row["error_reason"], now)
+        return [delay, delay + 24, delay + 48]
+
+    policies = [
+        ("no_retry",             no_retry),
+        ("razorpay_default",     razorpay_default),
+        ("naive_24h",            naive_24h),
+        ("ours_ml_payday",       ours),
+        ("retry_all_aggressive", retry_aggressive),
     ]
 
-    result = "\n".join(lines)
+    results = []
+    for name, fn in policies:
+        hits, attempts, fines = _simulate(fn, df_test, now)
+        rate = hits / n * 100
+        results.append({
+            "policy": name,
+            "recovered": hits,
+            "n": n,
+            "rate_pct": round(rate, 1),
+            "total_attempts": attempts,
+            "fines_inr": round(fines, 2),
+        })
 
+    # Lift over razorpay_default
+    baseline = next(r for r in results if r["policy"] == "razorpay_default")
+    for r in results:
+        r["lift_pts"] = round(r["rate_pct"] - baseline["rate_pct"], 1)
+
+    lines = [
+        "# Multi-Policy Backtest Results",
+        "",
+        "## Methodology",
+        f"- Held-out 20% test split ({n} rows), fixed `random_state=42`",
+        "- **Circular validation** — ground truth = same generator as training. Proves",
+        "  scheduler finds the optimum the data encodes; not evidence about real merchants.",
+        f"- Search horizon: 1–{MAX_HORIZON_HOURS}h",
+        "- Baseline: `razorpay_default` (3 fixed-slot reminders, not decline-aware)",
+        "- Network fines: estimated INR per attempt over Visa 20/30d or MC 10/24h cap",
+        "  (declared assumptions: Visa ₹8/violation, MC ₹20/violation)",
+        "",
+        "## Results",
+        "| Policy | Rate | Recovered | Attempts | Fines (INR) | Lift vs baseline |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in results:
+        lines.append(
+            f"| {r['policy']} | {r['rate_pct']}% | {r['recovered']}/{n} "
+            f"| {r['total_attempts']} | ₹{r['fines_inr']} | {r['lift_pts']:+.1f} pts |"
+        )
+
+    lines += [
+        "",
+        "## Honest Framing",
+        "Absolute rates are artifacts of the generator's coefficients.",
+        "Lift over razorpay_default is the load-bearing number.",
+        "Real-world bands (not ours): aggregate ML 22–40%, best-in-class 45–60%.",
+        "These rates must always be cited as synthetic alongside the control.",
+    ]
+
+    result_md = "\n".join(lines)
     if output_md:
         os.makedirs("docs", exist_ok=True)
-        with open("docs/backtest_results.md", "w") as f:
-            f.write(result)
+        with open("docs/backtest_results.md", "w", encoding="utf-8") as f:
+            f.write(result_md)
 
-    print(f"ours: {ours_rate:.1f}%  |  control({NAIVE_DELAY_HOURS}h): {naive_rate:.1f}%  "
-          f"|  lift: {ours_rate - naive_rate:+.1f} pts  |  avg delay: {avg_delay:.1f}h  |  N={n}")
+    # Print summary
+    for r in results:
+        print(f"{r['policy']:25s}  rate={r['rate_pct']:5.1f}%  "
+              f"fines=INR{r['fines_inr']:8.2f}  lift={r['lift_pts']:+.1f}pts")
+
+    # Return shape expected by /backtest endpoint and tests
+    ours_r = next(r for r in results if r["policy"] == "ours_ml_payday")
+    agg_r = next(r for r in results if r["policy"] == "razorpay_default")
+    aggressive_r = next(r for r in results if r["policy"] == "retry_all_aggressive")
+
     return {
         "soft_total": n,
-        "recovered": ours_hits,
-        "recovery_rate_pct": round(ours_rate, 1),
-        "control_rate_pct": round(naive_rate, 1),
-        "lift_pts": round(ours_rate - naive_rate, 1),
-        "avg_delay_hours": round(avg_delay, 1),
+        "recovered": ours_r["recovered"],
+        "recovery_rate_pct": ours_r["rate_pct"],
+        "control_rate_pct": agg_r["rate_pct"],
+        "lift_pts": ours_r["lift_pts"],
         "hard_retried": 0,
+        "policies": results,
+        "aggressive_fines_inr": aggressive_r["fines_inr"],
+        "ours_fines_inr": ours_r["fines_inr"],
     }
 
 

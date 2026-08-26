@@ -20,6 +20,25 @@ TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM", "")
 SENDGRID_KEY = os.getenv("SENDGRID_KEY", "")
 SENDGRID_FROM = os.getenv("SENDGRID_FROM", "")
 
+# Channel costs (INR) — declared assumptions, not measured rates. Tune via env or here.
+CHANNEL_COSTS_INR = {
+    "whatsapp": float(os.getenv("COST_WHATSAPP_INR", "0.35")),
+    "email": float(os.getenv("COST_EMAIL_INR", "0.02")),
+    "sms": float(os.getenv("COST_SMS_INR", "0.15")),
+}
+
+# Bank maintenance windows (IST start/end in minutes from midnight). Crosses-midnight if start>end.
+BANK_MAINTENANCE_WINDOWS: dict = {
+    "hdfc":  [(23 * 60, 1 * 60)],           # 23:00–01:00 IST daily
+    "icici": [(0, 2 * 60)],                  # 00:00–02:00 IST daily
+    "axis":  [(23 * 60, 1 * 60)],            # 23:00–01:00 IST daily
+    "sbi":   [(23 * 60 + 30, 0 * 60 + 30)],  # 23:30–00:30 IST Sundays (approximated daily)
+}
+_MAINTENANCE_DEFAULT = [(23 * 60, 1 * 60)]  # conservative default for unknown issuers
+
+ISSUER_DEGRADATION_THRESHOLD = int(os.getenv("ISSUER_DEGRADATION_THRESHOLD", "5"))
+ISSUER_DEGRADATION_WINDOW_MINUTES = int(os.getenv("ISSUER_DEGRADATION_WINDOW_MINUTES", "15"))
+
 _REQUIRED_LIVE = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"]
 
 def validate():

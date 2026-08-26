@@ -11,7 +11,7 @@ CATEGORICALS = ["method", "error_reason", "card_network", "card_type", "card_iss
 
 FEATURES = ["hour_of_day", "day_of_week", "hours_since_failure", "method_enc",
             "international", "reason_enc", "amount_bucket",
-            "card_network_enc", "card_type_enc", "card_issuer_enc"]
+            "card_network_enc", "card_type_enc", "card_issuer_enc", "is_payday"]
 
 _ENC_NAME = {"method": "method_enc", "error_reason": "reason_enc",
              "card_network": "card_network_enc", "card_type": "card_type_enc",

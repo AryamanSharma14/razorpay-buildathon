@@ -51,6 +51,7 @@ def test_force_now_soft_decline_runs_recovery():
          patch("src.db.update_event"), \
          patch("src.db.log_audit"), \
          patch("src.db.count_network_attempts", return_value=0), \
+         patch("src.db.last_attempt_ts", return_value=None), \
          patch("src.db.record_network_attempt"), \
          patch("src.recovery.create_payment_link", return_value={"id": "pl1", "short_url": "https://x"}) as link, \
          patch("src.nudge.send", return_value="mock") as nudge, \

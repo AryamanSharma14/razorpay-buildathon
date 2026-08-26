@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from src import db, config
 from src.recovery import run_recovery, create_payment_link, select_rail
+from src.classifier import classify_trajectory
 
 
 def _make_event(payment_id="pay_test_001", classification="soft", recovered=0, cancelled=0,
@@ -81,6 +82,7 @@ def test_run_recovery_routes_card_to_upi_and_audits():
          patch("src.db.update_event") as mock_update, \
          patch("src.db.log_audit") as mock_audit, \
          patch("src.db.count_network_attempts", return_value=0), \
+         patch("src.db.last_attempt_ts", return_value=None), \
          patch("src.db.record_network_attempt"), \
          patch("src.recovery.create_payment_link", return_value={"id": "pl1", "short_url": "https://x"}), \
          patch("src.nudge.send", return_value="mock"), \
@@ -106,12 +108,103 @@ def test_run_recovery_hard_decline_never_routes():
                        [(c[0], c[1]) for c in mock_update.call_args_list])
 
 
+def test_trajectory_escalating_blocks_retry():
+    history = [
+        {"error_reason": "insufficient_funds", "created_at": "2026-08-26 10:00:00"},
+        {"error_reason": "do_not_honor", "created_at": "2026-08-26 12:00:00"},
+    ]
+    event = _make_event()
+    with patch("src.db.get_event", return_value=event), \
+         patch("src.db.log_audit") as audit, \
+         patch("src.db.count_network_attempts", return_value=0), \
+         patch("src.db.last_attempt_ts", return_value=None), \
+         patch("src.db.get_decline_history", return_value=history), \
+         patch("src.recovery.create_payment_link") as link:
+        run_recovery("pay_test_001")
+    assert not link.called
+    actions = [c[0][1] for c in audit.call_args_list]
+    assert "trajectory_block" in actions
+
+
+def test_trajectory_timeout_then_insufficient_funds_allows_retry():
+    history = [
+        {"error_reason": "payment_timeout", "created_at": "2026-08-26 10:00:00"},
+        {"error_reason": "insufficient_funds", "created_at": "2026-08-26 12:00:00"},
+    ]
+    assert classify_trajectory(history) == "ok"
+
+
+def test_trajectory_stuck_three_same():
+    history = [{"error_reason": "insufficient_funds"}] * 3
+    assert classify_trajectory(history) == "trajectory_stuck"
+
+
+def test_trajectory_ok_single_entry():
+    assert classify_trajectory([{"error_reason": "insufficient_funds"}]) == "ok"
+
+
+def test_claude_abandon_blocks_retry():
+    event = _make_event()
+    claude_response = {"action": "abandon", "rail": None, "reasoning": "escalating pattern", "confidence": 0.9}
+    with patch("src.db.get_event", return_value=event), \
+         patch("src.db.log_audit") as audit, \
+         patch("src.db.update_event"), \
+         patch("src.db.count_network_attempts", return_value=0), \
+         patch("src.db.last_attempt_ts", return_value=None), \
+         patch("src.db.get_decline_history", return_value=[]), \
+         patch("src.recovery.claude_decide", return_value=claude_response), \
+         patch("src.recovery.create_payment_link") as link:
+        run_recovery("pay_test_001")
+    assert not link.called
+    actions = [c[0][1] for c in audit.call_args_list]
+    assert "claude_abandon" in actions
+
+
+def test_claude_reroute_overrides_rail():
+    event = _make_event(method="card", error_reason="payment_failed")
+    claude_response = {"action": "reroute", "rail": "upi", "reasoning": "card issuer degraded", "confidence": 0.8}
+    with patch("src.db.get_event", return_value=event), \
+         patch("src.db.log_audit") as audit, \
+         patch("src.db.update_event"), \
+         patch("src.db.count_network_attempts", return_value=0), \
+         patch("src.db.last_attempt_ts", return_value=None), \
+         patch("src.db.get_decline_history", return_value=[]), \
+         patch("src.db.record_network_attempt"), \
+         patch("src.recovery.claude_decide", return_value=claude_response), \
+         patch("src.recovery.create_payment_link", return_value={"id": "pl1", "short_url": "https://x"}), \
+         patch("src.nudge.send", return_value="mock"), \
+         patch("src.scheduler.predict_retry_window", return_value={"delay_hours": 2, "confidence": 0.7, "top_features": []}), \
+         patch("src.scheduler.schedule_retry"):
+        run_recovery("pay_test_001")
+    actions = [c[0][1] for c in audit.call_args_list]
+    assert "claude_reroute" in actions
+
+
+def test_claude_api_down_falls_back_to_ml():
+    event = _make_event()
+    with patch("src.db.get_event", return_value=event), \
+         patch("src.db.log_audit"), \
+         patch("src.db.update_event"), \
+         patch("src.db.count_network_attempts", return_value=0), \
+         patch("src.db.last_attempt_ts", return_value=None), \
+         patch("src.db.get_decline_history", return_value=[]), \
+         patch("src.db.record_network_attempt"), \
+         patch("src.recovery.claude_decide", return_value=None), \
+         patch("src.recovery.create_payment_link", return_value={"id": "pl1", "short_url": "https://x"}) as link, \
+         patch("src.nudge.send", return_value="mock"), \
+         patch("src.scheduler.predict_retry_window", return_value={"delay_hours": 2, "confidence": 0.7, "top_features": []}), \
+         patch("src.scheduler.schedule_retry"):
+        run_recovery("pay_test_001")
+    assert link.called  # fallback: ML path fires normally
+
+
 def test_cancel_sets_flag():
     event = _make_event()
     with patch("src.db.get_event", return_value=event), \
          patch("src.db.update_event") as mock_update, \
          patch("src.db.log_audit"), \
          patch("src.db.count_network_attempts", return_value=0), \
+         patch("src.db.last_attempt_ts", return_value=None), \
          patch("src.db.record_network_attempt"), \
          patch("src.recovery.create_payment_link", return_value={"id": "pl1", "short_url": "https://x"}), \
          patch("src.nudge.send", return_value="mock"), \
