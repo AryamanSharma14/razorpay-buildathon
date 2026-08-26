@@ -413,6 +413,35 @@ def cost_analysis():
     }
 
 
+@router.get("/backtest")
+def backtest():
+    import sys, os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        from scripts.backtest import run
+        return run(output_md=False)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/retry/{payment_id}/now")
+def force_retry(payment_id: str):
+    """Fire recovery immediately. Overrides timing only — run_recovery's guards still apply."""
+    from src.recovery import run_recovery
+
+    if not db.get_event(payment_id):
+        return {"error": "unknown payment_id"}
+
+    try:
+        sched.scheduler.remove_job(payment_id)
+    except Exception:
+        pass
+
+    db.log_audit(payment_id, "force_now", "manual force-fire, scheduler bypassed")
+    run_recovery(payment_id)
+    return {"fired": True, "event": db.get_event(payment_id)}
+
+
 @router.delete("/retry/{payment_id}")
 def cancel_retry(payment_id: str):
     try:
