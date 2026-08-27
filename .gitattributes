@@ -1,0 +1,2 @@
+# Committed frontend build — keep LF, don't diff as text noise
+src/web/dist/** -text

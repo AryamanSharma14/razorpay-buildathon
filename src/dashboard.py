@@ -15,12 +15,13 @@ _INSIGHTS_TTL = 300  # seconds
 
 router = APIRouter()
 
-_HTML = Path(__file__).parent / "web" / "dashboard.html"
+_DIST = Path(__file__).parent / "web" / "dist"
+_INDEX = _DIST / "index.html"
 
 
 @router.get("/")
 def serve_dashboard():
-    return FileResponse(str(_HTML))
+    return FileResponse(str(_INDEX))
 
 
 @router.get("/dashboard/stats")
@@ -413,35 +414,6 @@ def cost_analysis():
     }
 
 
-@router.get("/backtest")
-def backtest():
-    import sys, os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    try:
-        from scripts.backtest import run
-        return run(output_md=False)
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@router.post("/retry/{payment_id}/now")
-def force_retry(payment_id: str):
-    """Fire recovery immediately. Overrides timing only — run_recovery's guards still apply."""
-    from src.recovery import run_recovery
-
-    if not db.get_event(payment_id):
-        return {"error": "unknown payment_id"}
-
-    try:
-        sched.scheduler.remove_job(payment_id)
-    except Exception:
-        pass
-
-    db.log_audit(payment_id, "force_now", "manual force-fire, scheduler bypassed")
-    run_recovery(payment_id)
-    return {"fired": True, "event": db.get_event(payment_id)}
-
-
 @router.delete("/retry/{payment_id}")
 def cancel_retry(payment_id: str):
     try:
@@ -452,3 +424,13 @@ def cancel_retry(payment_id: str):
     db.update_event(payment_id, merchant_cancelled=1)
     db.log_audit(payment_id, "merchant_cancelled", "manual cancel via dashboard")
     return {"cancelled": True}
+
+
+@router.get("/{full_path:path}")
+def spa_fallback(full_path: str):
+    """Serve the built SPA. A real file under dist/ wins; everything else gets index.html
+    so client-side routes deep-link. Registered last, so it never shadows an API route."""
+    candidate = (_DIST / full_path).resolve()
+    if _DIST in candidate.parents and candidate.is_file():
+        return FileResponse(str(candidate))
+    return FileResponse(str(_INDEX))

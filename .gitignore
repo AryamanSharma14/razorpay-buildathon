@@ -7,6 +7,18 @@ __pycache__/
 dist/
 build/
 .next/
+
+# frontend build IS committed so a fresh clone runs the demo with no npm install
+!src/web/dist/
+!src/web/dist/**
+
+# frontend toolchain (dev-only)
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/coverage/
 *.db
 models/*.pkl
 data/*.csv
