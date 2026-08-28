@@ -50,8 +50,8 @@ export default function FunnelPage() {
                           <span className="font-mono tabular-nums">{v}</span>
                         </div>
                         <p className="mb-1 text-[11px] text-text-faint">{s.desc}</p>
-                        <div className="h-3 overflow-hidden rounded-sm bg-bg-subtle">
-                          <div className={cn('h-full rounded-sm', s.tone)}
+                        <div className="h-3 overflow-hidden rounded-xs bg-bg-subtle">
+                          <div className={cn('h-full rounded-xs', s.tone)}
                             style={{ width: `${Math.max((v / base) * 100, v > 0 ? 2 : 0)}%` }} />
                         </div>
                       </div>
@@ -64,7 +64,7 @@ export default function FunnelPage() {
                 <CardTitle>Where the safety guards step in</CardTitle>
                 <div className="space-y-2.5">
                   {GUARDS.map((g) => (
-                    <div key={g.key} className="rounded-sm bg-bg-subtle px-3 py-2">
+                    <div key={g.key} className="rounded-xs bg-bg-subtle px-3 py-2">
                       <div className="flex items-baseline justify-between">
                         <span className="text-[13px]">{g.label}</span>
                         <span className="font-mono text-sm font-semibold tabular-nums text-neg">{f[g.key]}</span>

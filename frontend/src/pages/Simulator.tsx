@@ -80,11 +80,11 @@ export default function Simulator() {
                 Payments
                 <input type="number" min={1} max={10} value={count}
                   onChange={(e) => setCount(Math.max(1, Math.min(10, Number(e.target.value))))}
-                  className="w-16 rounded-sm border border-border bg-bg-subtle px-2 py-1 font-mono text-[12px] outline-none focus:border-accent" />
+                  className="w-16 rounded-xs border border-border bg-bg-subtle px-2 py-1 font-mono text-[12px] outline-none focus:border-accent" />
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-[13px] text-text-muted">
                 <input type="checkbox" checked={advance} onChange={(e) => setAdvance(e.target.checked)}
-                  className="accent-[#6366f1]" />
+                  className="accent-copper" />
                 Skip the wait: fire scheduled retries immediately
               </label>
               <div className="ml-auto">
@@ -108,7 +108,7 @@ export default function Simulator() {
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {result.created.map((pid) => (
                     <Link key={pid} to={`/payment/${pid}`}
-                      className="rounded-sm bg-surface-hover px-2 py-0.5 font-mono text-[11px] text-accent hover:underline">
+                      className="rounded-xs bg-surface-hover px-2 py-0.5 font-mono text-[11px] text-accent hover:underline">
                       {pid}
                     </Link>
                   ))}
@@ -137,7 +137,7 @@ export default function Simulator() {
               <p className="py-8 text-center text-[13px] text-text-muted">Run a scenario to see the stream.</p>
             )}
             {[...events].reverse().map((ev, i) => (
-              <div key={`${ev.ts}-${i}`} className="rounded-sm bg-bg-subtle px-2.5 py-1.5">
+              <div key={`${ev.ts}-${i}`} className="rounded-xs bg-bg-subtle px-2.5 py-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <AuditActionBadge action={ev.type} />
                   <span className="text-[10px] text-text-faint">{ago(ev.ts)}</span>

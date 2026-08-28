@@ -6,18 +6,18 @@ export function Skeleton({ rows = 4 }: { rows?: number }) {
   return (
     <div className="space-y-2">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="h-8 animate-pulse rounded-sm bg-surface-hover" />
+        <div key={i} className="h-8 animate-pulse rounded-xs bg-surface-hover" />
       ))}
     </div>
   )
 }
 
-export function EmptyState({ message, cta }: { message: string; cta?: ReactNode }) {
+export function EmptyState({ message, cta, action }: { message: string; cta?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 py-10 text-center text-text-muted">
+    <div className="flex flex-col items-center gap-3 py-12 text-center text-text-muted">
       <Inbox className="h-6 w-6 text-text-faint" />
-      <p className="text-[13px]">{message}</p>
-      {cta}
+      <p className="max-w-xs text-[13px] leading-relaxed">{message}</p>
+      {action ?? cta}
     </div>
   )
 }

@@ -1,16 +1,23 @@
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils'
 import { InfoTip } from './primitives'
+import { OUTCOME, type Outcome } from '../../lib/outcome'
 
-type Tone = 'accent' | 'pos' | 'neg' | 'warn' | 'info' | 'muted'
+// Accept the legacy tone names the pages already pass; fold them into the four
+// outcome buckets so the colour language is consistent everywhere.
+type Tone = Outcome | 'accent' | 'pos' | 'neg' | 'warn' | 'info' | 'muted'
 
-const RAIL: Record<Tone, string> = {
-  accent: 'bg-accent',
-  pos: 'bg-pos',
-  neg: 'bg-neg',
-  warn: 'bg-warn',
-  info: 'bg-info',
-  muted: 'bg-border-strong',
+const TO_OUTCOME: Record<Tone, Outcome> = {
+  recovered: 'recovered',
+  blocked: 'blocked',
+  skipped: 'skipped',
+  pending: 'pending',
+  pos: 'recovered',
+  accent: 'blocked',
+  neg: 'blocked',
+  warn: 'skipped',
+  info: 'pending',
+  muted: 'pending',
 }
 
 export function KpiCard({
@@ -32,21 +39,24 @@ export function KpiCard({
   /** plain-English explanation shown on hover of the ⓘ */
   tip?: string
 }) {
+  const rail = OUTCOME[TO_OUTCOME[tone]].rail
   return (
     <div
       onClick={onClick}
       className={cn(
-        'relative overflow-hidden rounded-md border border-border bg-surface p-4 pl-5 shadow-[0_1px_2px_rgba(0,0,0,.4)]',
+        'relative overflow-hidden rounded-md border border-border bg-surface p-4 pl-5',
         onClick && 'cursor-pointer transition-colors hover:bg-surface-hover',
       )}
     >
-      <span className={cn('absolute left-0 top-0 h-full w-[3px]', RAIL[tone])} />
+      <span className={cn('absolute left-0 top-0 h-full w-[3px]', rail)} />
       <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
         {label}
         {tip && <InfoTip text={tip} />}
       </div>
-      <div className="mt-1 font-mono text-2xl font-bold tabular-nums">{value}</div>
-      {sub && <div className="mt-1 text-[12px] text-text-muted">{sub}</div>}
+      <div className="mt-1.5 font-serif text-[30px] font-medium leading-none tabular-nums text-paper">
+        {value}
+      </div>
+      {sub && <div className="mt-1.5 text-[12px] text-text-muted">{sub}</div>}
       {children}
     </div>
   )

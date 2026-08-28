@@ -1,33 +1,59 @@
 @import 'tailwindcss';
 
+/* Slash-style visual system. Token NAMES kept stable so every page's existing
+   utility classes (bg-surface, text-text-muted, border-border, ...) restyle by
+   value swap alone. Raw Slash names are added alongside for new components. */
 @theme {
-  --color-bg: #0b0b0f;
-  --color-bg-subtle: #101017;
-  --color-surface: #15151d;
-  --color-surface-hover: #1c1c26;
-  --color-border: #24242f;
-  --color-border-strong: #33333f;
-  --color-text: #e7e7ee;
-  --color-text-muted: #9a9aac;
-  --color-text-faint: #6a6a7c;
-  --color-accent: #6366f1;
-  --color-accent-fg: #ffffff;
-  --color-pos: #22c55e;
-  --color-neg: #ef4444;
-  --color-warn: #f59e0b;
-  --color-info: #60a5fa;
-  --color-ai: #a78bfa;
-  --color-infra: #38bdf8;
+  /* --- semantic roles (existing names, Slash values) --- */
+  --color-bg: #08080a;          /* obsidian — page canvas */
+  --color-bg-subtle: #040406;   /* onyx — deepest surface */
+  --color-surface: #040406;     /* onyx — card surface */
+  --color-surface-hover: #121317; /* carbon — elevated / hover */
+  --color-border: #1c1d22;      /* graphite — hairline */
+  --color-border-strong: #2e3038; /* slate — secondary border */
+  --color-text: #e2e3e9;        /* bone — DEFAULT body */
+  --color-text-muted: #9194a1;  /* fog */
+  --color-text-faint: #5e616e;  /* ash — muted / placeholder */
+  --color-accent: #cc9166;      /* copper — editorial/AI labels only, never buttons */
+  --color-accent-fg: #08080a;
+  --color-pos: #ffffff;         /* paper — "recovered" */
+  --color-neg: #cc9166;         /* copper — "blocked by compliance" (a good stop) */
+  --color-warn: #777a88;        /* steel — "skipped: not worth it" */
+  --color-info: #9194a1;        /* fog — pending / neutral */
+  --color-ai: #cc9166;          /* copper */
+  --color-infra: #9194a1;       /* fog */
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* --- raw Slash palette (new components) --- */
+  --color-obsidian: #08080a;
+  --color-onyx: #040406;
+  --color-carbon: #121317;
+  --color-graphite: #1c1d22;
+  --color-slate: #2e3038;
+  --color-ash: #5e616e;
+  --color-steel: #777a88;
+  --color-fog: #9194a1;
+  --color-mist: #acafb9;
+  --color-bone: #e2e3e9;
+  --color-paper: #ffffff;
+  --color-copper: #cc9166;
 
+  --gradient-gilded: linear-gradient(103deg, rgb(174, 147, 87), rgb(255, 240, 204) 40%, rgb(174, 147, 87) 70%, rgba(189, 157, 79, 0));
+  --shadow-subtle: rgba(255, 255, 255, 0.2) 0 0 0 1px;
+
+  /* pills everywhere, cards 10px, nav underline 2px.
+     --radius-xs is the escape hatch for bars / code blocks / skeletons that a
+     full pill would distort. */
+  --radius-xs: 4px;
+  --radius-sm: 9999px;
+  --radius-md: 10px;
+  --radius-lg: 10px;
+  --radius-nav: 2px;
+  --radius-full: 9999px;
+
+  --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
-
-/* ponytail: system-stack fallback for now; vendored woff2 lands in P8 polish */
 
 html,
 body,
@@ -43,6 +69,9 @@ body {
   font-size: 0.875rem;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Serif reserved for display type only (>=28px): page h1, hero numbers, verdict
+   banners. Opt in with .font-serif or the <Display> component. */
 
 @media (prefers-reduced-motion: reduce) {
   *,

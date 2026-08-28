@@ -90,11 +90,11 @@ export default function Economics() {
                 <label className="text-[12px] text-text-faint">Monthly GMV ₹</label>
                 <input type="number" value={gmv} min={0} step={100000}
                   onChange={(e) => setGmv(Number(e.target.value))}
-                  className="w-32 rounded-sm border border-border bg-bg-subtle px-2 py-1 font-mono text-[12px] outline-none focus:border-accent" />
+                  className="w-32 rounded-xs border border-border bg-bg-subtle px-2 py-1 font-mono text-[12px] outline-none focus:border-accent" />
                 <label className="text-[12px] text-text-faint">Failure %</label>
                 <input type="number" value={rate} min={0} max={100} step={0.5}
                   onChange={(e) => setRate(Number(e.target.value))}
-                  className="w-20 rounded-sm border border-border bg-bg-subtle px-2 py-1 font-mono text-[12px] outline-none focus:border-accent" />
+                  className="w-20 rounded-xs border border-border bg-bg-subtle px-2 py-1 font-mono text-[12px] outline-none focus:border-accent" />
               </div>
             }
           >

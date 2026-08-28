@@ -53,8 +53,8 @@ export default function ModelHealth() {
                             <span className="font-mono text-[12px] text-text-muted">{name}</span>
                             <span className="font-mono text-[12px] tabular-nums">{w.toFixed(4)}</span>
                           </div>
-                          <div className="h-2 overflow-hidden rounded-sm bg-bg-subtle">
-                            <div className="h-full rounded-sm bg-accent" style={{ width: `${(w / max) * 100}%` }} />
+                          <div className="h-2 overflow-hidden rounded-xs bg-bg-subtle">
+                            <div className="h-full rounded-xs bg-accent" style={{ width: `${(w / max) * 100}%` }} />
                           </div>
                         </div>
                       )

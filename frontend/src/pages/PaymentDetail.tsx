@@ -79,7 +79,7 @@ export default function PaymentDetail() {
                 ) : (
                   <ol className="space-y-2">
                     {d.decline_history.map((h, i) => (
-                      <li key={i} className="flex items-center justify-between rounded-sm bg-bg-subtle px-3 py-2">
+                      <li key={i} className="flex items-center justify-between rounded-xs bg-bg-subtle px-3 py-2">
                         <span className="font-mono text-[12px]">{h.error_reason ?? 'unknown'}</span>
                         <span className="text-[11px] text-text-faint">{dt(h.created_at)}</span>
                       </li>
@@ -94,7 +94,7 @@ export default function PaymentDetail() {
                 </CardTitle>
                 <div className="max-h-[28rem] space-y-1.5 overflow-y-auto">
                   {d.audit.map((row) => (
-                    <div key={row.id} className="rounded-sm bg-bg-subtle px-2.5 py-1.5">
+                    <div key={row.id} className="rounded-xs bg-bg-subtle px-2.5 py-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <AuditActionBadge action={row.action} />
                         <span className="text-[10px] text-text-faint">{dt(row.ts)}</span>

@@ -6,11 +6,14 @@ import { Card, CardTitle, PageHeader, Table, Td, Tr } from '../components/common
 import { QueryBoundary } from '../components/common/states'
 import { cn } from '../lib/utils'
 
-const COLORS = ['#6366f1', '#60a5fa', '#38bdf8', '#22c55e', '#f59e0b', '#ef4444', '#a78bfa', '#9a9aac']
+// Slash: gilded-tone data-viz ramp on obsidian.
+const COLORS = ['#cc9166', '#c7a882', '#b9a58e', '#9194a1', '#777a88', '#e2e3e9', '#acafb9', '#5e616e']
+const AXIS = '#1c1d22'
+const TICK = '#9194a1'
 
 const tooltipStyle = {
-  background: '#15151d', border: '1px solid #24242f', borderRadius: 8,
-  fontSize: 12, color: '#e7e7ee',
+  background: '#121317', border: '1px solid #2e3038', borderRadius: 10,
+  fontSize: 12, color: '#e2e3e9',
 } as const
 
 export default function Analytics() {
@@ -41,12 +44,12 @@ export default function Analytics() {
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={data} margin={{ left: -18, top: 4 }}>
-                        <CartesianGrid stroke="#24242f" vertical={false} />
-                        <XAxis dataKey="reason" tick={{ fill: '#9a9aac', fontSize: 11 }} interval={0} angle={-18}
-                          textAnchor="end" height={52} tickLine={false} axisLine={{ stroke: '#24242f' }} />
-                        <YAxis allowDecimals={false} tick={{ fill: '#9a9aac', fontSize: 11 }}
+                        <CartesianGrid stroke={AXIS} vertical={false} />
+                        <XAxis dataKey="reason" tick={{ fill: TICK, fontSize: 11 }} interval={0} angle={-18}
+                          textAnchor="end" height={52} tickLine={false} axisLine={{ stroke: AXIS }} />
+                        <YAxis allowDecimals={false} tick={{ fill: TICK, fontSize: 11 }}
                           tickLine={false} axisLine={false} />
-                        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#1c1c26' }} />
+                        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#121317' }} />
                         <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                           {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Bar>
@@ -71,15 +74,15 @@ export default function Analytics() {
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={data} layout="vertical" margin={{ left: 8, top: 4 }}>
-                        <CartesianGrid stroke="#24242f" horizontal={false} />
-                        <XAxis type="number" allowDecimals={false} tick={{ fill: '#9a9aac', fontSize: 11 }}
-                          tickLine={false} axisLine={{ stroke: '#24242f' }} />
-                        <YAxis type="category" dataKey="rail" width={70} tick={{ fill: '#9a9aac', fontSize: 11 }}
+                        <CartesianGrid stroke={AXIS} horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fill: TICK, fontSize: 11 }}
+                          tickLine={false} axisLine={{ stroke: AXIS }} />
+                        <YAxis type="category" dataKey="rail" width={70} tick={{ fill: TICK, fontSize: 11 }}
                           tickLine={false} axisLine={false} />
-                        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#1c1c26' }} />
+                        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#121317' }} />
                         <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                           {data.map((d, i) => (
-                            <Cell key={i} fill={d.rail === 'upi' ? '#22c55e' : COLORS[i % COLORS.length]} />
+                            <Cell key={i} fill={d.rail === 'upi' ? '#ffffff' : COLORS[i % COLORS.length]} />
                           ))}
                         </Bar>
                       </BarChart>
