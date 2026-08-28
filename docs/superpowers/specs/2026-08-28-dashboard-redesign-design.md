@@ -1,8 +1,17 @@
 # Dashboard Redesign — Slash-style restyle, simpler IA, demo wow-factor
 
 **Date:** 2026-08-28
-**Status:** Approved (design), pending spec review
+**Status:** Phase 1 shipped (`bc3d824`) · Phase 2 next · Phase 3 pending
 **Freeze:** 2026-09-02 · **Submit:** 2026-09-05
+
+## Progress
+
+- **Phase 1 — Visual restyle — DONE (2026-08-28, `bc3d824`).** Token *values* swapped to Slash
+  palette, names kept → all 12 pages restyled without per-page edits. `lib/outcome.ts` +
+  `outcome.test.ts` added. Fonts loaded. Pills/borders/serif applied. Analytics + Simulator hex
+  refs migrated. vite build + 4 vitest + 4 e2e + 108 pytest green. Server smoke-tested on :8000.
+- **Phase 2 — Simpler IA — NEXT.**
+- **Phase 3 — Wow + QoL — PENDING.**
 
 ## Problem
 
