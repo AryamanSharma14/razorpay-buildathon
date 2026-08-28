@@ -133,3 +133,27 @@ current Razorpay default — an A/B test we cannot run without a live merchant.
 **What we say:** published real-world bands are 22–40% (aggregate ML) to 45–60% (best-in-class).
 Our synthetic control (`razorpay_default`) is modelled on their documented behaviour, not a strawman.
 The mechanism is defensible; the exact number is not.
+
+---
+
+## 11. Frontend build was emitting to the wrong directory
+
+**What happened:** `vite.config.ts` had no `outDir`, so `npm run build` wrote to
+`frontend/dist/` — while FastAPI serves `src/web/dist/`. The committed dashboard was a stale
+scaffold build and every "rebuild" silently changed nothing the server could see.
+
+**Fix:** `build.outDir: '../src/web/dist'` + `emptyOutDir: true`. Verified: fresh hashed assets
+appear in `GET /` immediately after build. Documented in `docs/frontend-status.md`.
+
+---
+
+## 12. Playwright webServer path broke on Windows
+
+**What happened:** `playwright.config.ts` launched the test server with
+`'../.venv/Scripts/python.exe -m uvicorn ...'`. Playwright spawns that through Windows cmd,
+which cannot resolve a relative exe path — `'..' is not recognized as an internal or external
+command` — so every e2e run died before a single test.
+
+**Fix:** compute an absolute, quoted path from `import.meta.url`
+(`path.join(repoRoot, '.venv', 'Scripts', 'python.exe')`) and pass it as `command`, with
+`cwd: repoRoot`. All 3 e2e specs now pass against the real DEMO_MODE server on :8123.
