@@ -19,7 +19,7 @@ export default function Analytics() {
 
   return (
     <>
-      <PageHeader title="Decline Analytics" sub="Why payments fail, and which issuers are degrading" />
+      <PageHeader title="Decline Analytics" sub="Why payments fail, which payment method recovers best, and which banks are struggling." />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <QueryBoundary query={stats} skeletonRows={5}>
@@ -34,7 +34,7 @@ export default function Analytics() {
               .sort((a, b) => b.count - a.count)
             return (
               <Card>
-                <CardTitle>Declines by reason</CardTitle>
+                <CardTitle>Why payments fail</CardTitle>
                 {data.length === 0 ? (
                   <p className="py-8 text-center text-[13px] text-text-muted">No declines recorded yet.</p>
                 ) : (
@@ -64,7 +64,7 @@ export default function Analytics() {
             const data = Object.entries(s.rail_split).map(([rail, count]) => ({ rail, count }))
             return (
               <Card>
-                <CardTitle>Recovery rail split</CardTitle>
+                <CardTitle>Which method recovered it</CardTitle>
                 {data.length === 0 ? (
                   <p className="py-8 text-center text-[13px] text-text-muted">No payments recorded yet.</p>
                 ) : (
@@ -97,9 +97,9 @@ export default function Analytics() {
           {(h) => (
             <Card>
               <CardTitle action={<span className="text-[12px] text-text-faint">window: {h.window_minutes} min</span>}>
-                Issuer health
+                Bank health watch
               </CardTitle>
-              <Table head={['Issuer', 'Method', 'Recent failures', 'Threshold', 'Status']}>
+              <Table head={['Bank', 'Method', 'Failures recently', 'Alarm level', 'Status']}>
                 {h.issuers.map((row) => (
                   <Tr key={`${row.issuer}-${row.method}`}>
                     <Td mono>{row.issuer}</Td>

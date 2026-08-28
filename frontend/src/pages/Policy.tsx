@@ -13,7 +13,10 @@ export default function Policy() {
 
   return (
     <>
-      <PageHeader title="Policy Comparison" sub="Our compliance-bounded policy vs naive strategies, replayed on synthetic history" />
+      <PageHeader
+        title="Policy Comparison"
+        sub="Three retry strategies replayed on the same payments — a fair comparison. The agent's policy recovers the most while staying inside network rules."
+      />
       <QueryBoundary query={backtest} skeletonRows={6}>
         {(b) => {
           if (b.error) {
@@ -28,18 +31,21 @@ export default function Policy() {
             <>
               <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
                 <KpiCard label="Aggressive-policy fines" value={inr(b.aggressive_fines_inr ?? 0, { decimals: true })}
-                  tone="neg" sub="retry-everything ignores Visa Cat-1" />
+                  tone="neg" sub="retry-everything ignores Visa Cat-1"
+                  tip="Fines a 'retry everything' strategy would earn — it keeps retrying permanent failures, which card networks fine." />
                 <KpiCard label="Our policy fines" value={inr(b.ours_fines_inr ?? 0, { decimals: true })}
-                  tone="pos" sub="hard declines never re-presented" />
+                  tone="pos" sub="hard declines never re-presented"
+                  tip="Fines under the agent's strategy. Permanent failures are never retried, so fines stay near zero." />
                 <KpiCard label="Fines avoided"
                   value={inr((b.aggressive_fines_inr ?? 0) - (b.ours_fines_inr ?? 0), { decimals: true })}
-                  tone="warn" sub="compliance value per replay window" />
+                  tone="warn" sub="compliance value per replay window"
+                  tip="Money saved by not retrying hopeless payments." />
               </div>
 
               <div className="mt-4">
                 <Card>
-                  <CardTitle>Replay results by policy</CardTitle>
-                  <Table head={['Policy', 'Recovery rate', 'Recovered', 'Attempts', 'Fines (INR)', '']}>
+                  <CardTitle>Same payments, three strategies</CardTitle>
+                  <Table head={['Strategy', 'Recovery rate', 'Recovered', 'Retries tried', 'Fines (INR)', '']}>
                     {policies.map((p) => {
                       const ours = /ours|bounded|agent/i.test(p.policy)
                       return (

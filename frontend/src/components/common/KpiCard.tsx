@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils'
+import { InfoTip } from './primitives'
 
 type Tone = 'accent' | 'pos' | 'neg' | 'warn' | 'info' | 'muted'
 
@@ -19,6 +20,7 @@ export function KpiCard({
   tone = 'muted',
   onClick,
   children,
+  tip,
 }: {
   label: string
   value: ReactNode
@@ -27,6 +29,8 @@ export function KpiCard({
   tone?: Tone
   onClick?: () => void
   children?: ReactNode
+  /** plain-English explanation shown on hover of the ⓘ */
+  tip?: string
 }) {
   return (
     <div
@@ -37,7 +41,10 @@ export function KpiCard({
       )}
     >
       <span className={cn('absolute left-0 top-0 h-full w-[3px]', RAIL[tone])} />
-      <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">{label}</div>
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+        {label}
+        {tip && <InfoTip text={tip} />}
+      </div>
       <div className="mt-1 font-mono text-2xl font-bold tabular-nums">{value}</div>
       {sub && <div className="mt-1 text-[12px] text-text-muted">{sub}</div>}
       {children}

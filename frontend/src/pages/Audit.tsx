@@ -7,7 +7,7 @@ import { qk } from '../lib/queryKeys'
 import { dt } from '../lib/format'
 import { Card, CardTitle, PageHeader, Table, Td, Tr, Button } from '../components/common/primitives'
 import { QueryBoundary, EmptyState } from '../components/common/states'
-import { AuditActionBadge, KNOWN_AUDIT_ACTIONS } from '../components/common/badges'
+import { AuditActionBadge, KNOWN_AUDIT_ACTIONS, auditLabel } from '../components/common/badges'
 import { cn } from '../lib/utils'
 
 const PAGE_SIZE = 30
@@ -22,7 +22,7 @@ export default function Audit() {
 
   return (
     <>
-      <PageHeader title="Audit Trail" sub="Every decision the agent made, in order — filter by action or payment" />
+      <PageHeader title="Audit Trail" sub="Every decision the agent ever made, in order. This is the proof that nothing happens silently." />
 
       <Card className="mb-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -33,7 +33,7 @@ export default function Audit() {
           >
             <option value="">All actions</option>
             {KNOWN_AUDIT_ACTIONS.map((a) => (
-              <option key={a} value={a}>{a.replace(/_/g, ' ')}</option>
+              <option key={a} value={a}>{auditLabel(a)}</option>
             ))}
           </select>
           <input
@@ -66,7 +66,7 @@ export default function Audit() {
                 </div>
               }
             >
-              Decisions
+              Decision log
             </CardTitle>
             {d.rows.length === 0 ? (
               <EmptyState message="No audit rows match these filters." />

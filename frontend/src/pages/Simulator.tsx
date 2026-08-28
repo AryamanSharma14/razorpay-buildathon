@@ -11,13 +11,13 @@ import { cn } from '../lib/utils'
 import type { ScenarioId, SimulateResult } from '../lib/types'
 
 const SCENARIOS: { id: ScenarioId; label: string; desc: string; expects: string }[] = [
-  { id: 'soft', label: 'Soft decline', desc: 'insufficient_funds on card — ML schedules a timed retry', expects: 'scheduled → link → nudge' },
-  { id: 'hard', label: 'Hard decline', desc: 'card_expired — must never be retried (Visa Cat-1)', expects: 'hard_stop, force-fire blocked' },
-  { id: 'downtime', label: 'Bank downtime', desc: 'issuer outage — failures parked, drained on resolve', expects: 'downtime queue → drain' },
-  { id: 'card_testing', label: 'Card testing burst', desc: 'rapid repeats on one credential — spacing guard trips', expects: 'cardtesting_spacing_block' },
-  { id: 'trajectory', label: 'Escalating trajectory', desc: 'same order: insufficient_funds → do_not_honor', expects: 'trajectory_block' },
-  { id: 'ev_negative', label: 'Uneconomic ₹0.01', desc: 'micro-amount — recovery costs more than it returns', expects: 'skipped_uneconomic (EV<0)' },
-  { id: 'payday', label: 'Govt payday', desc: 'PSU salary day — retries snap to the payday window', expects: 'payday_snapped' },
+  { id: 'soft', label: 'Temporary failure', desc: 'Card fails for low balance. The agent schedules a retry at a smart time.', expects: 'retry scheduled → payment link → customer reminded' },
+  { id: 'hard', label: 'Permanent failure', desc: 'Expired card. The agent refuses to retry it — even a manual retry gets blocked.', expects: 'stopped: cannot succeed' },
+  { id: 'downtime', label: 'Bank outage', desc: 'A bank goes down. Failures are parked, then retried once the bank is back.', expects: 'parked until bank recovers → retrying parked payments' },
+  { id: 'card_testing', label: 'Fraud-pattern burst', desc: 'Rapid repeats on one card look like card-testing fraud. The spacing guard stops it.', expects: 'blocked: fraud-pattern spacing' },
+  { id: 'trajectory', label: 'Escalating failures', desc: 'Same order keeps failing with worsening reasons. The agent concludes it will never succeed.', expects: 'blocked: too many failed attempts' },
+  { id: 'ev_negative', label: 'Too small to chase', desc: 'A ₹0.01 payment — retrying it costs more than the amount itself.', expects: 'skipped: costs more than it returns' },
+  { id: 'payday', label: 'Payday timing', desc: 'Government salary day — retries move to when accounts actually have money.', expects: 'moved to payday' },
 ]
 
 export default function Simulator() {
@@ -42,7 +42,7 @@ export default function Simulator() {
     <>
       <PageHeader
         title="Simulator"
-        sub="Fire scripted scenarios through the real webhook pipeline — every guard applies"
+        sub="Press a button, watch the agent handle a real scenario end-to-end. Every safety rule applies — nothing is faked."
         action={
           <Button variant="danger" onClick={() => reset.mutate()} disabled={reset.isPending}>
             <RotateCcw className="h-3.5 w-3.5" /> Reset demo data
@@ -85,7 +85,7 @@ export default function Simulator() {
               <label className="flex cursor-pointer items-center gap-2 text-[13px] text-text-muted">
                 <input type="checkbox" checked={advance} onChange={(e) => setAdvance(e.target.checked)}
                   className="accent-[#6366f1]" />
-                Time-travel: fire scheduled retries now
+                Skip the wait: fire scheduled retries immediately
               </label>
               <div className="ml-auto">
                 <Button variant="primary" onClick={() => sim.mutate()} disabled={sim.isPending}>

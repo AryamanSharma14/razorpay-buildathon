@@ -9,10 +9,10 @@ import { QueryBoundary } from '../components/common/states'
 import { ClassPill, RailPill, AuditActionBadge } from '../components/common/badges'
 
 const FIELD_LABELS: Record<string, string> = {
-  order_id: 'Order', method: 'Method', card_network: 'Network', card_type: 'Card type',
-  card_issuer: 'Issuer', card_iin: 'IIN', credential: 'Credential', error_source: 'Error source',
-  error_step: 'Error step', error_code: 'Error code', international: 'International',
-  attempts: 'Attempts', nudge_channel: 'Nudge channel',
+  order_id: 'Order', method: 'Method', card_network: 'Card network', card_type: 'Card type',
+  card_issuer: 'Bank', card_iin: 'Card ID (IIN)', credential: 'Card credential', error_source: 'Where it failed',
+  error_step: 'At which step', error_code: 'Error code', international: 'International card',
+  attempts: 'Attempts so far', nudge_channel: 'Reminder channel',
 }
 
 export default function PaymentDetail() {
@@ -49,14 +49,14 @@ export default function PaymentDetail() {
           return (
             <div className="grid gap-4 lg:grid-cols-3">
               <Card className="lg:col-span-1">
-                <CardTitle>Event</CardTitle>
+                <CardTitle>The payment</CardTitle>
                 <StatRow label="Amount" value={inr(Number(ev.amount_paise ?? 0), { from: 'paise' })} />
-                <StatRow label="Classification" value={<ClassPill value={String(ev.classification ?? '')} />} />
+                <StatRow label="Failure type" value={<ClassPill value={String(ev.classification ?? '')} />} />
                 <StatRow label="Reason" value={String(ev.classify_reason ?? '—')} />
                 <StatRow label="Error reason" value={String(ev.error_reason ?? '—')} />
-                <StatRow label="Rail" value={<RailPill value={String(ev.chosen_rail ?? ev.method ?? '')} />} />
-                <StatRow label="Retry at" value={dt(String(ev.retry_at ?? ''))} />
-                <StatRow label="Recovered" value={ev.recovered ? `yes · ${dt(String(ev.recovered_at ?? ''))}` : 'no'}
+                <StatRow label="Payment method" value={<RailPill value={String(ev.chosen_rail ?? ev.method ?? '')} />} />
+                <StatRow label="Retry scheduled for" value={dt(String(ev.retry_at ?? ''))} />
+                <StatRow label="Money recovered" value={ev.recovered ? `yes · ${dt(String(ev.recovered_at ?? ''))}` : 'not yet'}
                   tone={ev.recovered ? 'pos' : undefined} />
                 {Object.entries(FIELD_LABELS).map(([k, label]) =>
                   ev[k] != null && ev[k] !== '' ? (
@@ -73,7 +73,7 @@ export default function PaymentDetail() {
               </Card>
 
               <Card className="lg:col-span-1">
-                <CardTitle>Decline history (order)</CardTitle>
+                <CardTitle>Previous failures on this order</CardTitle>
                 {d.decline_history.length === 0 ? (
                   <p className="py-6 text-center text-[13px] text-text-muted">Single decline on this order.</p>
                 ) : (
@@ -90,7 +90,7 @@ export default function PaymentDetail() {
 
               <Card className="lg:col-span-1">
                 <CardTitle action={<span className="text-[12px] text-text-faint">{d.audit.length} rows</span>}>
-                  Audit trail
+                  What the agent did
                 </CardTitle>
                 <div className="max-h-[28rem] space-y-1.5 overflow-y-auto">
                   {d.audit.map((row) => (

@@ -18,22 +18,26 @@ export default function Economics() {
 
   return (
     <>
-      <PageHeader title="Economics" sub="What the agent costs, what it recovers, and what it projects at scale" />
+      <PageHeader title="Economics" sub="What the agent costs to run, what it brings back, and what that's worth at your scale." />
 
       <QueryBoundary query={cost} skeletonRows={4}>
         {(c) => (
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             <KpiCard label="Nudge spend" value={inr(c.total_nudge_spend_inr, { decimals: true })} tone="muted"
-              sub="declared channel costs" />
+              sub="declared channel costs"
+              tip="Money spent sending reminder messages (SMS / WhatsApp / email)." />
             <KpiCard label="Revenue recovered" value={inr(c.revenue_recovered_inr)} tone="pos"
-              sub="via recovery payment links" />
+              sub="via recovery payment links"
+              tip="Money collected through the recovery payment links the agent created." />
             <KpiCard label="Net ROI" value={inr(c.net_roi_inr, { decimals: true })}
               tone={c.net_roi_inr >= 0 ? 'pos' : 'neg'}
-              sub={c.roi_multiple != null ? `${c.roi_multiple}× spend` : 'no spend yet'} />
+              sub={c.roi_multiple != null ? `${c.roi_multiple}× spend` : 'no spend yet'}
+              tip="Revenue recovered minus spend. Positive means the agent pays for itself." />
             <QueryBoundary query={fines} skeletonRows={2}>
               {(f) => (
                 <KpiCard label="Fines avoided" value={inr(f.fines_avoided_inr, { decimals: true })} tone="warn"
-                  sub={`${f.blocked_hard_declines} hard · ${f.blocked_cap_violations} cap · ${f.blocked_card_testing} card-testing`} />
+                  sub={`${f.blocked_hard_declines} hard · ${f.blocked_cap_violations} cap · ${f.blocked_card_testing} card-testing`}
+                  tip="Penalties that never happened because the agent blocked the risky retries that would have caused them." />
               )}
             </QueryBoundary>
           </div>
@@ -44,7 +48,7 @@ export default function Economics() {
         <QueryBoundary query={cost} skeletonRows={4}>
           {(c) => (
             <Card>
-              <CardTitle>Spend by channel</CardTitle>
+              <CardTitle>What reminders cost</CardTitle>
               {Object.keys(c.per_channel).length === 0 ? (
                 <p className="py-6 text-center text-[13px] text-text-muted">No nudges sent yet.</p>
               ) : (
@@ -62,7 +66,7 @@ export default function Economics() {
         <QueryBoundary query={fines} skeletonRows={4}>
           {(f) => (
             <Card>
-              <CardTitle>Fine avoidance breakdown</CardTitle>
+              <CardTitle>Which fines we dodged</CardTitle>
               <StatRow label="Visa domestic hard declines" value={inr(f.breakdown.visa_domestic_inr, { decimals: true })} />
               <StatRow label="Visa cross-border hard declines" value={inr(f.breakdown.visa_crossborder_inr, { decimals: true })} />
               <StatRow label="Mastercard excessive retry" value={inr(f.breakdown.mc_excessive_retry_inr, { decimals: true })} />
@@ -94,20 +98,24 @@ export default function Economics() {
               </div>
             }
           >
-            ROI projection
+            ROI projection — what this is worth at your scale
           </CardTitle>
           <QueryBoundary query={roi} skeletonRows={4}>
             {(r) => (
               <>
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                   <KpiCard label="Failed monthly" value={inr(r.failed_monthly_inr)} tone="neg"
-                    sub={`${pct(r.inputs.failure_rate_pct)} of ${inr(r.inputs.gmv_monthly_inr)}`} />
+                    sub={`${pct(r.inputs.failure_rate_pct)} of ${inr(r.inputs.gmv_monthly_inr)}`}
+                    tip="How much money fails every month at this business size." />
                   <KpiCard label="Recovered today" value={inr(r.currently_recovered_inr)} tone="muted"
-                    sub={`${pct(r.control_rate_pct)} untimed baseline`} />
+                    sub={`${pct(r.control_rate_pct)} untimed baseline`}
+                    tip="What you'd recover with no agent — blindly retrying at random times." />
                   <KpiCard label="With agent" value={inr(r.with_agent_inr)} tone="accent"
-                    sub={`${pct(r.agent_rate_pct)} ML-timed`} />
+                    sub={`${pct(r.agent_rate_pct)} ML-timed`}
+                    tip="What you'd recover when the model picks the retry moment." />
                   <KpiCard label="Annual lift" value={inr(r.annual_lift_inr)} tone="pos"
-                    sub={`+${inr(r.fines_avoided_annual_inr, { decimals: true })} fines avoided/yr`} />
+                    sub={`+${inr(r.fines_avoided_annual_inr, { decimals: true })} fines avoided/yr`}
+                    tip="Extra money per year from using the agent: better recovery plus avoided fines." />
                 </div>
                 <div className="mt-4">
                   <DisclaimerNote>{r.note}</DisclaimerNote>

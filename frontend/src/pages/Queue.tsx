@@ -20,7 +20,7 @@ export default function Queue() {
     <>
       <PageHeader
         title="Live Queue"
-        sub="Soft declines with a scheduled recovery attempt — force-fire or cancel any of them"
+        sub="Payments waiting to be retried. The agent picks the moment — you can retry one now or cancel it."
       />
       <QueryBoundary query={stats} skeletonRows={6} empty={(s) => s.pending_retries.length === 0}>
         {(s) => (
@@ -28,7 +28,7 @@ export default function Queue() {
             <CardTitle action={<span className="text-[12px] text-text-faint">{s.pending_retries.length} pending</span>}>
               Pending retries
             </CardTitle>
-            <Table head={['Payment', 'Amount', 'Class', 'Rail', 'Retry at', 'Conf.', 'Top signals', '']}>
+            <Table head={['Payment', 'Amount', 'Failure type', 'Method', 'Retries in', 'Success chance', 'Why this time', '']}>
               {s.pending_retries.map((p) => (
                 <Tr key={p.payment_id}>
                   <Td mono>

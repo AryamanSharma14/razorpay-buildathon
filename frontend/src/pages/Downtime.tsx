@@ -15,13 +15,16 @@ export default function Downtime() {
 
   return (
     <>
-      <PageHeader title="Downtime Board" sub="Bank/network outages and the payments parked until they resolve" />
+      <PageHeader
+        title="Downtime Board"
+        sub="When a bank or UPI service goes down, retrying is pointless — so the agent parks those payments and retries them once the service is back."
+      />
       <QueryBoundary query={board} skeletonRows={4}>
         {(b) => (
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardTitle action={<span className="text-[12px] text-text-faint">{b.active_downtimes.length} active</span>}>
-                Active downtimes
+                Outages happening now
               </CardTitle>
               {b.active_downtimes.length === 0 ? (
                 <EmptyState message="No active outages — all rails healthy." />
@@ -48,7 +51,7 @@ export default function Downtime() {
 
             <Card>
               <CardTitle action={<span className="text-[12px] text-text-faint">{b.queued_payments.length} parked</span>}>
-                Downtime queue
+                Payments waiting for the outage to end
               </CardTitle>
               {b.queued_payments.length === 0 ? (
                 <EmptyState message="Nothing parked — failures during outages will appear here." />

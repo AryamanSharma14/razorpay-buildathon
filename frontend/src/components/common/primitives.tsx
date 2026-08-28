@@ -14,6 +14,20 @@ export function Card({ className, children }: { className?: string; children: Re
   )
 }
 
+/** Hover tooltip for plain-English explanations. CSS-only, no JS state. */
+export function InfoTip({ text }: { text: string }) {
+  return (
+    <span className="group/tip relative inline-flex align-middle">
+      <span className="flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-border-strong text-[9px] font-bold text-text-faint hover:text-text-muted">
+        i
+      </span>
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-60 -translate-x-1/2 rounded-sm border border-border bg-surface-hover px-2.5 py-1.5 text-[11px] font-normal normal-case leading-snug tracking-normal text-text opacity-0 shadow-lg transition-opacity duration-150 group-hover/tip:opacity-100">
+        {text}
+      </span>
+    </span>
+  )
+}
+
 export function CardTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between">

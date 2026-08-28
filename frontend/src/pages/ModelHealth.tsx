@@ -14,21 +14,28 @@ export default function ModelHealth() {
 
   return (
     <>
-      <PageHeader title="Model Health" sub="Retry-timing model status, feature importances and prediction quality" />
+      <PageHeader
+        title="Model Health"
+        sub="How well the retry-timing model is doing. It only decides WHEN to retry — the safety rules decide IF a retry is allowed."
+      />
       <QueryBoundary query={health} skeletonRows={4}>
         {(h) => (
           <>
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
               <KpiCard label="Model status" value={h.status.toUpperCase()} tone={STATUS_TONE[h.status] ?? 'muted'}
-                sub={h.model_loaded ? 'gradient-boosted retry timing' : (h.note ?? 'model not loaded')} />
+                sub={h.model_loaded ? 'gradient-boosted retry timing' : (h.note ?? 'model not loaded')}
+                tip="Is the retry-timing model loaded and running?" />
               <KpiCard label="Mean confidence (last 100)"
                 value={h.mean_confidence_last100 != null ? pct(h.mean_confidence_last100 * 100) : '—'}
                 tone={h.mean_confidence_last100 != null && h.mean_confidence_last100 > 0.6 ? 'pos' : 'warn'}
-                sub="predicted recovery probability" />
+                sub="predicted recovery probability"
+                tip="How sure the model is about its timing decisions on average. Higher = more trustworthy." />
               <KpiCard label="Fallback rate" value={pct(h.fallback_rate_pct ?? 0)} tone="info"
-                sub="predictions using the 0.5 default" />
+                sub="predictions using the 0.5 default"
+                tip="How often the model said 'not sure' and a safe default was used instead. Lower is better." />
               <KpiCard label="Horizon" value="240h" tone="muted"
-                sub="1–10 day retry window per research brief" />
+                sub="1–10 day retry window per research brief"
+                tip="The window the model plans retries inside: 1 to 10 days after the failure." />
             </div>
 
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -58,10 +65,10 @@ export default function ModelHealth() {
 
               <Card>
                 <CardTitle>What the model decides</CardTitle>
-                <StatRow label="Output" value="delay_hours + confidence" />
-                <StatRow label="Payday snapping" value="insufficient_funds → next payday window" />
-                <StatRow label="Maintenance snap" value="retries moved out of bank windows" />
-                <StatRow label="Issuer degradation" value="volume spike → park 1h" />
+                <StatRow label="Output" value="when to retry + how sure" />
+                <StatRow label="Payday snapping" value="low-balance failures wait for payday" />
+                <StatRow label="Maintenance snap" value="retries move past bank maintenance" />
+                <StatRow label="Issuer degradation" value="bank failing a lot → wait 1 hour" />
                 <div className="mt-4">
                   <DisclaimerNote>
                     The model only picks <em>when</em> to retry. <em>Whether</em> a retry is allowed is decided by

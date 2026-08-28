@@ -18,7 +18,7 @@ export default function Overview() {
     <>
       <PageHeader
         title="Overview"
-        sub="Compliance-bounded recovery across every failed payment"
+        sub="What failed, what we got back, and how much money the agent saved — updates live."
         action={
           <span className="flex items-center gap-1.5 text-[11px] text-text-faint">
             <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-pos' : 'bg-neg'}`} />
@@ -31,15 +31,19 @@ export default function Overview() {
         {(s) => (
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             <KpiCard label="Failed payments" value={s.total_failed} tone="muted"
-              sub={`${s.soft} soft · ${s.hard} hard`} />
+              sub={`${s.soft} soft · ${s.hard} hard`}
+              tip="Every failed payment the agent has seen. Soft = temporary (worth retrying). Hard = permanent (never retry)." />
             <KpiCard label="Recovery rate" value={pct(s.recovery_rate_pct)} tone="pos"
-              sub="of soft declines · 45.5% untimed baseline" />
+              sub="of soft declines · 45.5% untimed baseline"
+              tip="Share of retryable failures that eventually got paid. The baseline is what blindly retrying at random times would achieve." />
             <KpiCard label="Revenue recovered" value={inr(s.revenue_recovered_inr)} tone="accent"
-              sub={`${s.recovered} payments via recovery links`} />
+              sub={`${s.recovered} payments via recovery links`}
+              tip="Real money collected from payments that had failed — revenue the merchant would otherwise have lost." />
             <QueryBoundary query={fines} skeletonRows={2}>
               {(f) => (
                 <KpiCard label="Fines avoided" value={inr(f.fines_avoided_inr, { decimals: true })} tone="warn"
-                  sub={`${f.blocked_hard_declines} hard retries never fired`} />
+                  sub={`${f.blocked_hard_declines} hard retries never fired`}
+                  tip="Card networks fine merchants for retrying payments that can never succeed. The agent refuses those retries, so the fines never happen." />
               )}
             </QueryBoundary>
           </div>
@@ -50,7 +54,7 @@ export default function Overview() {
         <QueryBoundary query={stats} skeletonRows={4}>
           {(s) => (
             <Card>
-              <CardTitle>Hard declines — never retried</CardTitle>
+              <CardTitle>Permanent failures — never retried</CardTitle>
               {s.hard_decline_list.length === 0 ? (
                 <p className="py-6 text-center text-[13px] text-text-muted">No hard declines yet.</p>
               ) : (
@@ -75,7 +79,7 @@ export default function Overview() {
         <QueryBoundary query={stats} skeletonRows={4}>
           {(s) => (
             <Card>
-              <CardTitle>Rail split</CardTitle>
+              <CardTitle>Payment methods used</CardTitle>
               {Object.entries(s.rail_split).map(([rail, n]) => (
                 <div key={rail} className="flex items-baseline justify-between border-b border-border py-2 last:border-0">
                   <span className="text-[13px] uppercase text-text-muted">{rail}</span>
