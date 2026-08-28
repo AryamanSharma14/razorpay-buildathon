@@ -10,10 +10,19 @@ Usage:
 import argparse
 import json
 import os
+import sys
 import time
 import sqlite3
 
 import httpx
+
+# Windows consoles default to cp1252; the demo draws box-drawing characters.
+# Force UTF-8 so `python scripts/demo.py` works without env workarounds.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # exotic streams (some CI loggers) — degrade, don't crash
+        pass
 
 BASE = "http://localhost:8000"
 WEBHOOK = "/webhook/razorpay?skip_sig=1"
@@ -281,9 +290,15 @@ def scene_maintenance_window(client: httpx.Client) -> str:
     return pid
 
 
-def scene_fine_avoidance(client: httpx.Client):
+def scene_fine_avoidance(client: httpx.Client, hard_pid: str):
     """Show fine avoidance ₹ calculation."""
     narrate("SCENE 9 — Visa/MC fine avoidance (compliance value in ₹)")
+    # Prove the guard holds even under manual force-fire: a hard decline
+    # must yield zero attempts, and the block registers as an avoided fine.
+    r = post(client, f"/retry/{hard_pid}/now", {})
+    ev = r.get("event") or {}
+    narrate(f"   Force-fired hard decline {hard_pid} → retry_at: {ev.get('retry_at')} "
+            f"(guard held — no payment link sent)")
     fa = get(client, "/dashboard/fine-avoidance")
     blocked_hard = fa.get("blocked_hard_declines", 0)
     blocked_cap = fa.get("blocked_cap_violations", 0)
@@ -361,7 +376,7 @@ def main():
         upi_pid = scene_upi_reroute(client)
         time.sleep(1)
 
-        scene_hard_decline(client)
+        hard_pid = scene_hard_decline(client)
         time.sleep(1)
 
         scene_ev_skip(client)
@@ -379,7 +394,7 @@ def main():
         scene_maintenance_window(client)
         time.sleep(1)
 
-        scene_fine_avoidance(client)
+        scene_fine_avoidance(client, hard_pid)
         time.sleep(0.5)
 
         print_summary(client)

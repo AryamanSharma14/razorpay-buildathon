@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Response
-from src import compliance, config, db
+from src import compliance, config, db, events
 from src.classifier import classify
 from src import scheduler as sched
 
@@ -91,9 +91,15 @@ def _handle_payment_failed(payload: dict):
 
     db.insert_event(row)
     db.log_audit(pid, "classified", result["reason"])
+    events.push("classified", pid, {
+        "classification": result["type"],
+        "reason": result["reason"],
+        "amount_paise": row["amount_paise"],
+    })
 
     if result["type"] == "hard":
         db.log_audit(pid, "hard_stop", "no retry scheduled")
+        events.push("hard_stop", pid, {"reason": result["reason"]})
         return
 
     if result["type"] == "infrastructure":
@@ -101,11 +107,16 @@ def _handle_payment_failed(payload: dict):
         if dt:
             db.queue_for_downtime(pid, dt["id"])
             db.log_audit(pid, "downtime_queued", f"method={row['method']} issuer={row.get('card_issuer')}")
+            events.push("downtime_queued", pid,
+                        {"method": row["method"], "issuer": row.get("card_issuer")})
         return
 
     allowed, why = compliance.check_retry_allowed(row)
     if not allowed:
-        db.log_audit(pid, "network_cap_block", why)
+        action = ("cardtesting_spacing_block" if why.startswith("cardtesting_spacing_block")
+                  else "network_cap_block")
+        db.log_audit(pid, action, why)
+        events.push(action, pid, {"why": why})
         return
 
     # soft: ML predict retry window, schedule (OTP abandoned gets fast 30-min retry)
@@ -139,6 +150,7 @@ def _handle_downtime_started(payload: dict):
     if method and not db.active_downtime_for(method, issuer):
         db.insert_downtime(method, issuer, now)
         db.log_audit("system", "downtime_started", f"{method}/{issuer}")
+        events.push("downtime_started", "system", {"method": method, "issuer": issuer})
 
 
 def _handle_downtime_resolved(payload: dict):
@@ -148,6 +160,7 @@ def _handle_downtime_resolved(payload: dict):
     now = datetime.utcnow().isoformat()
     db.resolve_downtime(method, issuer, now)
     db.log_audit("system", "downtime_resolved", f"{method}/{issuer}")
+    events.push("downtime_resolved", "system", {"method": method, "issuer": issuer})
 
     # Drain queued payments → fire recovery for each
     pids = db.drain_downtime_queue(method, issuer)
@@ -172,3 +185,4 @@ def _handle_link_paid(payload: dict):
     now = datetime.utcnow().isoformat()
     db.update_event(pid, recovered=1, recovered_at=now)
     db.log_audit(pid, "recovered", "payment_link.paid webhook")
+    events.push("recovered", pid, {"amount_paise": (existing or {}).get("amount_paise", 0)})

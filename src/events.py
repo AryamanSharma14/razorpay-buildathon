@@ -22,6 +22,14 @@ def push(event_type: str, payment_id: str, detail: dict | None = None) -> None:
         _bus.pop(0)  # ponytail: O(n) pop fine at 500-cap demo scale
 
 
+def bus_size() -> int:
+    return len(_bus)
+
+
+def clear() -> None:
+    _bus.clear()
+
+
 async def _generate():
     pos = max(0, len(_bus) - 20)  # send last 20 on connect, then stream new
     while True:

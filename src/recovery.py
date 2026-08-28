@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import httpx
 
-from src import compliance, config, db
+from src import compliance, config, db, events
 from src import scheduler as sched
 
 MAX_ATTEMPTS = 3
@@ -98,6 +98,7 @@ def run_recovery(payment_id: str):
     # Guards: never retry hard, already recovered, or cancelled
     if event.get("classification") == "hard":
         db.log_audit(payment_id, "hard_guard", "hard-decline recovery blocked")
+        events.push("hard_guard", payment_id, {})
         return
     if event.get("recovered"):
         db.log_audit(payment_id, "already_recovered", "skip")
@@ -108,7 +109,10 @@ def run_recovery(payment_id: str):
 
     allowed, why = compliance.check_retry_allowed(event)
     if not allowed:
-        db.log_audit(payment_id, "network_cap_block", why)
+        action = ("cardtesting_spacing_block" if why.startswith("cardtesting_spacing_block")
+                  else "network_cap_block")
+        db.log_audit(payment_id, action, why)
+        events.push(action, payment_id, {"why": why})
         return
 
     upi_ok, upi_why = compliance.check_upi_mandate_allowed(event)
@@ -120,6 +124,7 @@ def run_recovery(payment_id: str):
     trajectory = classify_trajectory(db.get_decline_history(payment_id))
     if trajectory == "trajectory_escalating":
         db.log_audit(payment_id, "trajectory_block", "escalating decline pattern — stopping retry")
+        events.push("trajectory_block", payment_id, {})
         return
 
     # EV guard: skip if expected value negative across all channels
@@ -130,6 +135,7 @@ def run_recovery(payment_id: str):
     if ev <= 0:
         arithmetic = f"EV={confidence:.2f}*{amount_inr:.2f}-{min_cost:.2f}={ev:.2f}<=0"
         db.log_audit(payment_id, "skipped_uneconomic", arithmetic)
+        events.push("ev_skip", payment_id, {"arithmetic": arithmetic})
         return
 
     # Claude decision engine — structured action decision before committing attempt
@@ -177,6 +183,8 @@ def run_recovery(payment_id: str):
         return
 
     db.update_event(payment_id, payment_link_id=link["id"], payment_link_url=link["short_url"])
+    events.push("recovery_attempt", payment_id,
+                {"attempt": attempts, "rail": rail, "link_id": link["id"]})
 
     # Send nudge (imported here to avoid circular at module level)
     try:

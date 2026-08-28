@@ -183,3 +183,5 @@ def schedule_retry(payment_id: str, delay_hours: int, error_reason: str = "", is
 
     db.update_event(payment_id, retry_at=retry_at)
     db.log_audit(payment_id, "scheduled", f"delay={delay_hours}h fire_at={retry_at}")
+    from src import events
+    events.push("scheduled", payment_id, {"retry_at": retry_at, "delay_hours": delay_hours})

@@ -173,3 +173,25 @@ def test_fine_avoidance_calculates_correctly():
     assert data["blocked_card_testing"] == 1
     # pay_a domestic ₹8.30, pay_b cross-border ₹20.75, pay_c MC ₹41.50 = ₹70.55
     assert abs(data["fines_avoided_inr"] - 70.55) < 0.01
+
+
+def test_fine_avoidance_counts_hard_stop_and_dedupes():
+    """hard_stop (webhook) and hard_guard (force-fire) both avoid a fine;
+    one payment blocked at both entry points counts once."""
+    audit_rows = [
+        {"action": "hard_stop", "payment_id": "pay_a", "detail": "no retry scheduled"},
+        {"action": "hard_guard", "payment_id": "pay_a", "detail": "blocked"},
+        {"action": "hard_stop", "payment_id": "pay_b", "detail": "no retry scheduled"},
+    ]
+    events = {
+        "pay_a": {"international": 0},
+        "pay_b": {"international": 1},
+    }
+    with patch("src.db.get_audit_log", return_value=audit_rows), \
+         patch("src.db.get_event", side_effect=lambda pid: events.get(pid)):
+        resp = _client().get("/dashboard/fine-avoidance")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["blocked_hard_declines"] == 2
+    # pay_a domestic ₹8.30 + pay_b cross-border ₹20.75 = ₹29.05
+    assert abs(data["fines_avoided_inr"] - 29.05) < 0.01

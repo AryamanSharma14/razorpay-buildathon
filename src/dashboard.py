@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from src import config, db
 from src import scheduler as sched
@@ -140,9 +140,10 @@ def force_retry(payment_id: str):
 
 
 @router.get("/dashboard/audit")
-def audit_trail(page: int = Query(1, ge=1), limit: int = Query(50, le=200)):
+def audit_trail(page: int = Query(1, ge=1), limit: int = Query(50, le=200),
+                action: str = Query(None), payment_id: str = Query(None)):
     offset = (page - 1) * limit
-    rows = db.get_audit_log(limit=limit, offset=offset)
+    rows = db.get_audit_log(limit=limit, offset=offset, action=action, payment_id=payment_id)
     return {"page": page, "limit": limit, "rows": rows}
 
 
@@ -266,7 +267,7 @@ def recovery_funnel():
     total_failed = len(events)
     classified_soft = sum(1 for e in events if e.get("classification") == "soft")
     classified_hard = sum(1 for e in events if e.get("classification") == "hard")
-    compliance_blocked = _count_action("network_cap_block")
+    compliance_blocked = _count_action("network_cap_block") + _count_action("cardtesting_spacing_block")
     ev_skipped = _count_action("skipped_uneconomic")
     trajectory_blocked = _count_action("trajectory_block")
     maintenance_snapped = _count_action("maintenance_window_snap")
@@ -321,7 +322,15 @@ def roi_projection(
 @router.get("/dashboard/fine-avoidance")
 def fine_avoidance():
     rows = db.get_audit_log(limit=0)  # all rows
-    hard_blocks = [r for r in rows if r["action"] == "hard_guard"]
+    # Hard declines are blocked at two entry points: classification
+    # (hard_stop, webhook.py) and recovery/force-fire (hard_guard,
+    # recovery.py). Both avoid a Visa Cat-1 fine. Dedupe by payment so one
+    # payment blocked at both points counts once.
+    hard_seen: dict[str, dict] = {}
+    for r in rows:
+        if r["action"] in ("hard_stop", "hard_guard"):
+            hard_seen.setdefault(r["payment_id"], r)
+    hard_blocks = list(hard_seen.values())
     cap_blocks = [r for r in rows if r["action"] == "network_cap_block"]
     ct_blocks = [r for r in rows if r["action"] == "cardtesting_spacing_block"]
 
@@ -424,6 +433,19 @@ def cancel_retry(payment_id: str):
     db.update_event(payment_id, merchant_cancelled=1)
     db.log_audit(payment_id, "merchant_cancelled", "manual cancel via dashboard")
     return {"cancelled": True}
+
+
+@router.get("/dashboard/payment/{payment_id}")
+def payment_detail(payment_id: str):
+    """Full drill-down for one payment: event row, order-level decline history, audit trail."""
+    event = db.get_event(payment_id)
+    if not event:
+        return JSONResponse(status_code=404, content={"error": "unknown payment_id"})
+    return {
+        "event": event,
+        "decline_history": db.get_decline_history(payment_id),
+        "audit": db.get_audit_log(limit=0, payment_id=payment_id),
+    }
 
 
 @router.get("/{full_path:path}")

@@ -1,6 +1,17 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { AppLayout } from './App'
-import { Placeholder } from './components/common/Placeholder'
+import Overview from './pages/Overview'
+import Queue from './pages/Queue'
+import PaymentDetail from './pages/PaymentDetail'
+import Analytics from './pages/Analytics'
+import FunnelPage from './pages/Funnel'
+import Policy from './pages/Policy'
+import Downtime from './pages/Downtime'
+import ModelHealth from './pages/ModelHealth'
+import Audit from './pages/Audit'
+import Economics from './pages/Economics'
+import Insights from './pages/Insights'
+import Simulator from './pages/Simulator'
 
 export const NAV_GROUPS = [
   {
@@ -41,18 +52,18 @@ export const NAV_GROUPS = [
 ] as const
 
 const routeEls = [
-  { path: '/', el: <Placeholder name="Overview" /> },
-  { path: '/queue', el: <Placeholder name="Live Queue" /> },
-  { path: '/payment/:id', el: <Placeholder name="Payment Detail" /> },
-  { path: '/analytics', el: <Placeholder name="Decline Analytics" /> },
-  { path: '/funnel', el: <Placeholder name="Recovery Funnel" /> },
-  { path: '/policy', el: <Placeholder name="Policy Comparison" /> },
-  { path: '/downtime', el: <Placeholder name="Downtime Board" /> },
-  { path: '/model-health', el: <Placeholder name="Model Health" /> },
-  { path: '/audit', el: <Placeholder name="Audit Trail" /> },
-  { path: '/economics', el: <Placeholder name="Economics" /> },
-  { path: '/insights', el: <Placeholder name="Claude Insights" /> },
-  { path: '/simulator', el: <Placeholder name="Simulator" /> },
+  { path: '/', el: <Overview /> },
+  { path: '/queue', el: <Queue /> },
+  { path: '/payment/:id', el: <PaymentDetail /> },
+  { path: '/analytics', el: <Analytics /> },
+  { path: '/funnel', el: <FunnelPage /> },
+  { path: '/policy', el: <Policy /> },
+  { path: '/downtime', el: <Downtime /> },
+  { path: '/model-health', el: <ModelHealth /> },
+  { path: '/audit', el: <Audit /> },
+  { path: '/economics', el: <Economics /> },
+  { path: '/insights', el: <Insights /> },
+  { path: '/simulator', el: <Simulator /> },
 ]
 
 export const router = createBrowserRouter([

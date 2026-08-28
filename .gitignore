@@ -23,6 +23,10 @@ frontend/coverage/
 models/*.pkl
 data/*.csv
 *.log
+# local verification artifacts (test/demo/server captures)
+*.err
+*_err.txt
+*_out.txt
 *.tmp
 .DS_Store
 Thumbs.db

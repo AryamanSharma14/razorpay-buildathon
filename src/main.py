@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from src import config, db
 from src.webhook import router as webhook_router
+from src.events import router as events_router
+from src.simulator import router as simulator_router
 from src.dashboard import router as dashboard_router
 from src import scheduler as sched
 
@@ -24,5 +26,7 @@ def ping():
 
 
 app.include_router(webhook_router)
+app.include_router(events_router)
+app.include_router(simulator_router)
 # dashboard_router is included last: it owns the SPA catch-all GET /{full_path:path}
 app.include_router(dashboard_router)

@@ -129,15 +129,33 @@ def log_audit(payment_id: str, action: str, detail: str = ""):
         )
 
 
-def get_audit_log(limit: int = 100, offset: int = 0) -> list[dict]:
+def get_audit_log(limit: int = 100, offset: int = 0, action: str | None = None,
+                  payment_id: str | None = None) -> list[dict]:
+    where, params = [], []
+    if action:
+        where.append("action=?")
+        params.append(action)
+    if payment_id:
+        where.append("payment_id=?")
+        params.append(payment_id)
+    sql = "SELECT * FROM audit_log"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    # ts is second-granularity; id tiebreak keeps pagination stable within a second
+    sql += " ORDER BY ts DESC, id DESC"
     with _conn() as conn:
         if limit == 0:
-            rows = conn.execute("SELECT * FROM audit_log ORDER BY ts DESC").fetchall()
+            rows = conn.execute(sql, params).fetchall()
         else:
-            rows = conn.execute(
-                "SELECT * FROM audit_log ORDER BY ts DESC LIMIT ? OFFSET ?", (limit, offset)
-            ).fetchall()
+            rows = conn.execute(sql + " LIMIT ? OFFSET ?", params + [limit, offset]).fetchall()
         return [dict(r) for r in rows]
+
+
+def reset_db():
+    """Clear all demo data, keep schema. Used by POST /simulate/reset."""
+    with _conn() as conn:
+        for table in ("events", "audit_log", "network_attempts", "active_downtime", "downtime_queue"):
+            conn.execute(f"DELETE FROM {table}")
 
 
 def active_downtime_for(method: str, issuer: str) -> dict | None:
