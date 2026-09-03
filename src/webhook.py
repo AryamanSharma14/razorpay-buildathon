@@ -173,7 +173,7 @@ def _handle_downtime_resolved(payload: dict):
 def _handle_link_paid(payload: dict):
     entity = payload.get("payload", {}).get("payment_link", {}).get("entity", {})
     notes = entity.get("notes", {})
-    pid = notes.get("recovery_for")
+    pid = notes.get("recovery_for") or notes.get("payment_id")
     if not pid:
         return
 

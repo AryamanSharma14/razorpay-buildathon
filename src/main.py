@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from src import config, db
 from src.webhook import router as webhook_router
@@ -15,6 +16,9 @@ def startup():
     db.init_db()
     sched.load_model()
     sched.scheduler.start()
+    if config.DEMO_MODE and not os.getenv("PYTEST_CURRENT_TEST"):
+        from src.seed import seed_database
+        seed_database()
 
 @app.on_event("shutdown")
 def shutdown():

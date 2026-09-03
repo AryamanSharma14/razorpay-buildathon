@@ -39,8 +39,10 @@ export const api = {
   insights: (bust?: number) => get<Insights>('/dashboard/insights' + qs({ bust })),
   issuerHealth: () => get<IssuerHealth>('/dashboard/issuer-health'),
   modelHealth: () => get<ModelHealth>('/dashboard/model-health'),
-  costAnalysis: () => get<CostAnalysis>('/dashboard/cost-analysis'),
-  fineAvoidance: () => get<FineAvoidance>('/dashboard/fine-avoidance'),
+  costAnalysis: (from?: string, to?: string) =>
+    get<CostAnalysis>('/dashboard/cost-analysis' + qs({ from_date: from, to_date: to })),
+  fineAvoidance: (from?: string, to?: string) =>
+    get<FineAvoidance>('/dashboard/fine-avoidance' + qs({ from_date: from, to_date: to })),
   roi: (gmv: number, rate: number) =>
     get<RoiProjection>('/dashboard/roi-projection' + qs({ gmv_monthly: gmv, failure_rate_pct: rate })),
   payment: (id: string) => get<PaymentDetail>(`/dashboard/payment/${encodeURIComponent(id)}`),
@@ -58,5 +60,5 @@ export const api = {
     international?: boolean
     advance_hours?: number
   }) => send<SimulateResult>('POST', '/simulate', body),
-  simulateReset: () => send<{ reset: boolean }>('POST', '/simulate/reset'),
+  simulateReset: () => send<{ reset: boolean }>('POST', '/simulate/reset?reseed=true'),
 }

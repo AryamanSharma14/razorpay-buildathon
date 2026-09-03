@@ -1,10 +1,9 @@
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils'
 import { InfoTip } from './primitives'
-import { OUTCOME, type Outcome } from '../../lib/outcome'
+import { type Outcome } from '../../lib/outcome'
+import { SpotlightCard } from '../reactbits/SpotlightCard'
 
-// Accept the legacy tone names the pages already pass; fold them into the four
-// outcome buckets so the colour language is consistent everywhere.
 type Tone = Outcome | 'accent' | 'pos' | 'neg' | 'warn' | 'info' | 'muted'
 
 const TO_OUTCOME: Record<Tone, Outcome> = {
@@ -20,6 +19,20 @@ const TO_OUTCOME: Record<Tone, Outcome> = {
   muted: 'pending',
 }
 
+const SPOTLIGHT_COLORS: Record<Outcome, string> = {
+  recovered: 'rgba(91, 185, 140, 0.16)',
+  blocked: 'rgba(204, 145, 102, 0.18)',
+  skipped: 'rgba(145, 148, 161, 0.12)',
+  pending: 'rgba(204, 145, 102, 0.14)',
+}
+
+const BORDER_ACCENTS: Record<Outcome, string> = {
+  recovered: 'border-l-4 border-l-pos',
+  blocked: 'border-l-4 border-l-copper',
+  skipped: 'border-l-4 border-l-steel',
+  pending: 'border-l-4 border-l-fog',
+}
+
 export function KpiCard({
   label,
   value,
@@ -31,33 +44,37 @@ export function KpiCard({
 }: {
   label: string
   value: ReactNode
-  /** required for any rate — enforces "no rate ships without its control" */
   sub?: ReactNode
   tone?: Tone
   onClick?: () => void
   children?: ReactNode
-  /** plain-English explanation shown on hover of the ⓘ */
   tip?: string
 }) {
-  const rail = OUTCOME[TO_OUTCOME[tone]].rail
+  const outcomeKey = TO_OUTCOME[tone]
+  const accent = BORDER_ACCENTS[outcomeKey]
+  const spotlight = SPOTLIGHT_COLORS[outcomeKey]
+
   return (
-    <div
-      onClick={onClick}
+    <SpotlightCard
+      spotlightColor={spotlight}
       className={cn(
-        'relative overflow-hidden rounded-md border border-border bg-surface p-4 pl-5',
-        onClick && 'cursor-pointer transition-colors hover:bg-surface-hover',
+        'relative overflow-hidden rounded-2xl border border-border bg-surface p-5 transition-all duration-300 hover:border-steel/80 hover:shadow-lg',
+        accent,
+        onClick && 'cursor-pointer hover:bg-surface-hover hover:scale-[1.01]'
       )}
+      title={tip}
     >
-      <span className={cn('absolute left-0 top-0 h-full w-[3px]', rail)} />
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-        {label}
-        {tip && <InfoTip text={tip} />}
+      <div onClick={onClick} className="space-y-2">
+        <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">
+          <span className="truncate pr-2">{label}</span>
+          {tip && <InfoTip text={tip} />}
+        </div>
+        <div className="font-serif text-2xl lg:text-3xl font-bold leading-tight tabular-nums text-paper tracking-tight py-1">
+          {value}
+        </div>
+        {sub && <div className="text-xs text-text-muted font-sans leading-snug">{sub}</div>}
+        {children}
       </div>
-      <div className="mt-1.5 font-serif text-[30px] font-medium leading-none tabular-nums text-paper">
-        {value}
-      </div>
-      {sub && <div className="mt-1.5 text-[12px] text-text-muted">{sub}</div>}
-      {children}
-    </div>
+    </SpotlightCard>
   )
 }

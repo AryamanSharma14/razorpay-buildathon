@@ -4,13 +4,17 @@ export interface PendingRetry {
   payment_id: string
   amount_inr: number
   retry_at: string | null
+  retry_day_label: string | null
   classify_reason: string | null
+  error_reason: string | null
   chosen_rail: string | null
   confidence: number | null
   top_features: Feature[]
   nudge_reasoning: string | null
   nudge_message: string | null
   payment_link_url: string | null
+  human_reasoning: string | null
+  card_issuer: string | null
 }
 
 export interface HardDecline {
@@ -101,8 +105,28 @@ export interface RoiProjection {
   monthly_lift_inr: number
   annual_lift_inr: number
   fines_avoided_annual_inr: number
-  control_rate_pct: number
-  agent_rate_pct: number
+  control_rate_pct?: number
+  agent_rate_pct?: number
+}
+
+export interface ChannelSpendDetail {
+  count: number
+  spend_inr: number
+}
+
+export interface CostAnalysis {
+  note: string
+  total_nudge_spend_inr: number
+  revenue_recovered_inr: number
+  net_roi_inr: number
+  roi_multiple: number | null
+  per_channel: Record<string, ChannelSpendDetail>
+}
+
+export interface FineAvoidanceBreakdown {
+  visa_domestic_inr: number
+  visa_crossborder_inr: number
+  mc_excessive_retry_inr: number
 }
 
 export interface FineAvoidance {
@@ -110,45 +134,45 @@ export interface FineAvoidance {
   blocked_hard_declines: number
   blocked_cap_violations: number
   blocked_card_testing: number
-  breakdown: { visa_domestic_inr: number; visa_crossborder_inr: number; mc_excessive_retry_inr: number }
-}
-
-export interface CostAnalysis {
-  total_nudge_spend_inr: number
-  revenue_recovered_inr: number
-  net_roi_inr: number
-  roi_multiple: number | null
-  per_channel: Record<string, { count: number; spend_inr: number }>
-  note: string
+  breakdown: FineAvoidanceBreakdown
 }
 
 export interface BacktestPolicy {
   policy: string
-  recovery_rate_pct: number
+  rate_pct: number
   recovered: number
-  attempts: number
+  n: number
+  total_attempts: number
   fines_inr: number
-}
-export interface Backtest {
-  policies?: BacktestPolicy[]
-  aggressive_fines_inr?: number
-  ours_fines_inr?: number
-  disclaimer?: string
-  error?: string
-  [k: string]: unknown
+  lift_pts: number
 }
 
+export interface BacktestResult {
+  soft_total: number
+  recovered: number
+  recovery_rate_pct: number
+  control_rate_pct: number
+  lift_pts: number
+  hard_retried: number
+  policies: BacktestPolicy[]
+  aggressive_fines_inr: number
+  ours_fines_inr: number
+}
+
+export type Backtest = BacktestResult
+
 export interface PaymentDetail {
-  event: Record<string, unknown>
-  decline_history: { error_reason: string | null; created_at: string }[]
+  event: Record<string, unknown> | null
+  decline_history?: { error_reason: string; created_at: string }[]
   audit: AuditRow[]
 }
 
 export interface SseEvent {
+  ts: string
   type: string
   payment_id: string
-  ts: string
-  detail: Record<string, unknown>
+  summary?: string
+  data?: Record<string, unknown>
 }
 
 export type ScenarioId =
@@ -161,6 +185,7 @@ export type ScenarioId =
   | 'payday'
 
 export interface SimulateResult {
+  scenario?: ScenarioId
   created: string[]
   events_emitted: number
 }

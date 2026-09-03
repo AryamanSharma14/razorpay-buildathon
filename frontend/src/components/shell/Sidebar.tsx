@@ -1,51 +1,86 @@
 import { NavLink } from 'react-router-dom'
-import * as Icons from 'lucide-react'
-import { NAV_GROUPS } from '../../router'
+import {
+  LayoutDashboard,
+  Clock,
+  Brain,
+  ShieldCheck,
+  IndianRupee,
+  Clapperboard,
+  FileText,
+} from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { sound } from '../../lib/sound'
+import { LiveBeacon } from '../reactbits/LiveBeacon'
+
+const NAV_ITEMS = [
+  { to: '/', label: 'Overview', icon: LayoutDashboard, exact: true },
+  { to: '/queue', label: 'Recovery Queue', icon: Clock },
+  { to: '/analytics', label: 'AI Intelligence', icon: Brain },
+  { to: '/policy', label: 'Safety & Fines', icon: ShieldCheck },
+  { to: '/economics', label: 'ROI & Economics', icon: IndianRupee },
+  { to: '/audit', label: 'Audit & Insights', icon: FileText },
+  { to: '/simulator', label: 'Demo Simulator', icon: Clapperboard, isDemo: true },
+]
 
 export function Sidebar() {
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface">
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <span className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-copper/15 font-serif text-[15px] text-copper">
-          R
-        </span>
-        <div className="leading-tight">
-          <div className="font-serif text-[15px] font-medium">Recovery Agent</div>
-          <div className="text-[10px] uppercase tracking-[0.08em] text-text-faint">Razorpay</div>
-        </div>
-      </div>
-      <nav className="flex-1 overflow-y-auto px-2 pb-4">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="mt-4 first:mt-1">
-            <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
-              {group.label}
-            </div>
-            {group.items.map((item) => {
-              const Icon = (Icons[item.icon as keyof typeof Icons] ??
-                Icons.Circle) as Icons.LucideIcon
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === '/'}
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center gap-2.5 rounded-nav px-3 py-2 text-[13px] transition-colors',
-                      isActive
-                        ? 'border-l-2 border-copper bg-carbon text-text'
-                        : 'border-l-2 border-transparent text-text-muted hover:bg-surface-hover hover:text-text',
-                    )
-                  }
-                >
-                  <Icon className="h-4 w-4" strokeWidth={1.75} />
-                  {item.label}
-                </NavLink>
-              )
-            })}
+    <aside className="flex w-60 shrink-0 flex-col justify-between border-r border-border bg-[#0a0b0e] p-4 shadow-xl z-20">
+      <div className="space-y-6">
+        {/* Brand */}
+        <div className="flex items-center gap-3 px-2 py-1">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-copper text-obsidian font-serif font-bold text-lg shadow-md">
+            R
           </div>
-        ))}
-      </nav>
+          <div>
+            <div className="font-serif text-sm font-bold text-paper tracking-tight">Razorpay AI</div>
+            <div className="text-[10px] text-text-muted font-mono uppercase tracking-wider">Recovery Engine</div>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="space-y-1">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.exact}
+                onClick={() => sound.click()}
+                className={({ isActive }) =>
+                  cn(
+                    'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all duration-150',
+                    isActive
+                      ? 'bg-carbon text-paper border border-border/80 shadow-xs'
+                      : 'text-text-muted hover:bg-carbon/50 hover:text-bone'
+                  )
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-copper shadow-[0_0_8px_#cc9166]" />
+                    )}
+                    <Icon className={cn('h-4 w-4 shrink-0 transition-colors', isActive ? 'text-copper' : 'text-text-faint group-hover:text-bone')} />
+                    <span>{item.label}</span>
+                    {item.isDemo && (
+                      <span className="ml-auto rounded-full bg-copper/15 border border-copper/30 px-2 py-0.5 text-[9px] font-bold text-copper uppercase">
+                        Demo
+                      </span>
+                    )}
+                  </>
+                )}
+              </NavLink>
+            )
+          })}
+        </nav>
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-border/60 pt-3 px-2 flex items-center justify-between text-[10px] text-text-faint font-mono">
+        <span>Production v2.4</span>
+        <LiveBeacon status="active" label="Connected" size="sm" />
+      </div>
     </aside>
   )
 }

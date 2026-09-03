@@ -1,4 +1,4 @@
-"""Claude-generated explainable nudge + multi-channel dispatch."""
+"""Autonomous AI-generated explainable nudge + multi-channel dispatch."""
 import json
 
 import httpx
@@ -57,7 +57,7 @@ JSON only, no markdown."""
         data = json.loads(text)
         return {
             "message": str(data.get("message", _TEMPLATE_MSG.format(url=link_url))),
-            "reasoning": str(data.get("reasoning", "Claude-generated")),
+            "reasoning": str(data.get("reasoning", "AI-generated")),
         }
     except Exception as e:
         return {
@@ -117,7 +117,7 @@ def send(event: dict, link_url: str) -> str:
     message = result["message"]
     reasoning = result["reasoning"]
 
-    llm_or_template = "template" if "template" in reasoning else "claude"
+    llm_or_template = "template" if "template" in reasoning else "ai_agent"
     db.log_audit(pid, "nudge_generated", llm_or_template)
 
     channel = "mock"

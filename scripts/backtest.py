@@ -139,13 +139,37 @@ def run(output_md=True):
         return [12 * i for i in range(1, 26)]
 
     def ours(row):
-        # 3 attempts like razorpay_default, but first attempt ML-timed + payday-snapped.
-        # Subsequent attempts follow 24h after first (same budget, better initial timing).
+        # 3 attempts like razorpay_default, but ML-timed across optimal horizon windows.
+        # Uses GradientBoosting probability surface across 240h horizon to pick
+        # top 3 distinct high-confidence slots (avoiding bank dead-zones and aligning with liquidity).
         if not has_model:
             return [24, 48, 72]
-        delay = _ml_best_hour(clf, bundle, row, now)
-        delay = _snap_payday(delay, row["error_reason"], now)
-        return [delay, delay + 24, delay + 48]
+        hours = np.arange(1, MAX_HORIZON_HOURS + 1)
+        futures = [now + timedelta(hours=int(h)) for h in hours]
+        reason, method = row["error_reason"], row["method"]
+        intl, amt = int(row["international"]), int(row["amount_bucket"])
+        network, ctype, issuer = row["card_network"], row["card_type"], row["card_issuer"]
+        base = [
+            _enc(bundle, "method_enc", method, "card"), intl,
+            _enc(bundle, "reason_enc", reason, "payment_failed"), amt,
+            _enc(bundle, "card_network_enc", network, "none"),
+            _enc(bundle, "card_type_enc", ctype, "none"),
+            _enc(bundle, "card_issuer_enc", issuer, "none"),
+        ]
+        X = np.array([
+            [f.hour, f.weekday(), int(h)] + base + [int(f.weekday() == 4 or f.day in (1, 15))]
+            for h, f in zip(hours, futures)
+        ])
+        probs = clf.predict_proba(X)[:, 1]
+        sorted_indices = np.argsort(-probs)
+        chosen = []
+        for idx in sorted_indices:
+            h = int(hours[idx])
+            if all(abs(h - c) >= 12 for c in chosen):
+                chosen.append(h)
+            if len(chosen) == 3:
+                break
+        return chosen if chosen else [24, 48, 72]
 
     policies = [
         ("no_retry",             no_retry),

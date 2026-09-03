@@ -1,5 +1,6 @@
-import { AlertCircle, Inbox } from 'lucide-react'
+import { AlertCircle, Inbox, Play } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from './primitives'
 
 export function Skeleton({ rows = 4 }: { rows?: number }) {
@@ -12,12 +13,30 @@ export function Skeleton({ rows = 4 }: { rows?: number }) {
   )
 }
 
-export function EmptyState({ message, cta, action }: { message: string; cta?: ReactNode; action?: ReactNode }) {
+export function EmptyState({
+  message,
+  cta,
+  action,
+  showSimulateAction,
+}: {
+  message: string
+  cta?: ReactNode
+  action?: ReactNode
+  showSimulateAction?: boolean
+}) {
   return (
     <div className="flex flex-col items-center gap-3 py-12 text-center text-text-muted">
       <Inbox className="h-6 w-6 text-text-faint" />
       <p className="max-w-xs text-[13px] leading-relaxed">{message}</p>
       {action ?? cta}
+      {showSimulateAction && (
+        <Link to="/simulator" className="mt-1">
+          <Button variant="primary">
+            <Play className="h-3 w-3" />
+            <span>Run a live demo</span>
+          </Button>
+        </Link>
+      )}
     </div>
   )
 }
@@ -52,6 +71,6 @@ export function QueryBoundary<T>({
   if (query.isLoading) return <Skeleton rows={skeletonRows} />
   if (query.isError) return <ErrorState error={query.error} retry={query.refetch} />
   const data = query.data as T
-  if (empty && empty(data)) return <EmptyState message="No data yet." />
+  if (empty && empty(data)) return <EmptyState message="No data yet." showSimulateAction />
   return <>{children(data)}</>
 }

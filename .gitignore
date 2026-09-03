@@ -21,8 +21,10 @@ frontend/playwright-report/
 frontend/coverage/
 *.db
 models/*.pkl
+!models/retry_model.pkl
 data/*.csv
 *.log
+
 # local verification artifacts (test/demo/server captures)
 *.err
 *_err.txt
@@ -34,10 +36,23 @@ Thumbs.db
 .vscode/
 .pytest_cache/
 
-# internal planning / AI-process docs — not for public submission repo
+# Large media assets (pitch videos & audio captures)
+*.mp4
+*.mp3
+*.wav
+screenshots/
+*.png
+!frontend/public/*.png
+!frontend/public/*.svg
+!frontend/public/*.ico
+generate_pitch_pdf.cjs
+screenshot_audit.cjs
+tooltip-check.*
+frontend/tooltip-check.*
+
+# internal planning / process docs
 CLAUDE.md
 plan.md
 .claude/
-docs/win-plan.md
-docs/research-brief.md
-docs/decisions/
+docs/
+
