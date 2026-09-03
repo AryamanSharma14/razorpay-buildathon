@@ -69,6 +69,7 @@ def test_maintenance_window_snap_audit_logged():
     from datetime import datetime
     with patch("src.db.update_event"), \
          patch("src.db.log_audit") as audit, \
+         patch("src.db.issuer_failure_count", return_value=0), \
          patch("src.scheduler.scheduler") as mock_sched, \
          patch("src.scheduler.datetime") as mock_dt:
         # Force utcnow to return a time that after adding delay lands in maintenance window

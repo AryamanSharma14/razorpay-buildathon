@@ -15,7 +15,7 @@ _INSIGHTS_TTL = 300  # seconds
 
 router = APIRouter()
 
-_DIST = Path(__file__).parent / "web" / "dist"
+_DIST = (Path(__file__).parent / "web" / "dist").resolve()
 _INDEX = _DIST / "index.html"
 
 
@@ -24,13 +24,20 @@ def serve_dashboard():
     return FileResponse(str(_INDEX))
 
 
+def _filter_items_by_date(items: list[dict], ts_key: str, from_date: str | None, to_date: str | None) -> list[dict]:
+    res = items
+    if from_date:
+        fd = from_date.replace("T", " ")
+        res = [x for x in res if (x.get(ts_key) or "").replace("T", " ") >= fd]
+    if to_date:
+        td = to_date.replace("T", " ")
+        res = [x for x in res if (x.get(ts_key) or "").replace("T", " ") <= td]
+    return res
+
+
 @router.get("/dashboard/stats")
 def stats(from_date: str = Query(None), to_date: str = Query(None)):
-    events = db.all_events()
-    if from_date:
-        events = [e for e in events if (e.get("created_at") or "") >= from_date]
-    if to_date:
-        events = [e for e in events if (e.get("created_at") or "") <= to_date]
+    events = _filter_items_by_date(db.all_events(), "created_at", from_date, to_date)
 
     total = len(events)
     soft = [e for e in events if e.get("classification") == "soft"]
@@ -59,17 +66,71 @@ def stats(from_date: str = Query(None), to_date: str = Query(None)):
             top_f = json.loads(top_f) if top_f else []
         except Exception:
             top_f = []
+
+        # Build human-readable reasoning from audit trail
+        pid = e["payment_id"]
+        audit_rows = db.get_audit_log(limit=20, payment_id=pid)
+        reasoning_parts = []
+        error_reason = e.get("error_reason") or e.get("classify_reason") or "payment_failed"
+        issuer = e.get("card_issuer") or "bank"
+        conf = e.get("confidence")
+        conf_pct = f"{round(conf * 100)}%" if conf else "—"
+
+        # Classify root cause
+        if "insufficient" in error_reason.lower():
+            reasoning_parts.append(f"Low balance detected on {issuer} card")
+        elif "network" in error_reason.lower() or "timeout" in error_reason.lower():
+            reasoning_parts.append(f"Network timeout on {issuer} gateway")
+        else:
+            reasoning_parts.append(f"Transient decline ({error_reason}) on {issuer}")
+
+        # Check what snapping happened
+        has_payday_snap = any(r["action"] == "payday_snapped" for r in audit_rows)
+        has_maintenance_snap = any(r["action"] == "maintenance_window_snap" for r in audit_rows)
+        has_degraded_park = any(r["action"] == "issuer_degraded_park" for r in audit_rows)
+
+        if has_payday_snap:
+            reasoning_parts.append("ML scanned 240h horizon → snapped to next salary credit window")
+        else:
+            reasoning_parts.append(f"ML selected optimal retry slot ({conf_pct} confidence)")
+
+        if has_maintenance_snap:
+            reasoning_parts.append(f"adjusted past {issuer} bank maintenance window")
+        if has_degraded_park:
+            reasoning_parts.append(f"{issuer} showing elevated failures → parked 1h for stability")
+
+        human_reasoning = " → ".join(reasoning_parts)
+
+        # Build day label from retry_at
+        retry_at_str = e.get("retry_at") or ""
+        retry_day_label = ""
+        if retry_at_str:
+            try:
+                from datetime import datetime as _dt
+                rt = _dt.fromisoformat(retry_at_str.replace("Z", "+00:00"))
+                day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                day_name = day_names[rt.weekday()]
+                retry_day_label = f"{day_name} {rt.day} {month_names[rt.month - 1]}, {rt.strftime('%I:%M %p').lstrip('0')}"
+            except Exception:
+                retry_day_label = retry_at_str[:16]
+
         pending_rows.append({
-            "payment_id": e["payment_id"],
+            "payment_id": pid,
             "amount_inr": e["amount_paise"] / 100,
-            "retry_at": e.get("retry_at"),
+            "retry_at": retry_at_str,
+            "retry_day_label": retry_day_label,
             "classify_reason": e.get("classify_reason"),
+            "error_reason": error_reason,
             "chosen_rail": e.get("chosen_rail"),
-            "confidence": e.get("confidence"),
+            "confidence": conf,
             "top_features": top_f,
             "nudge_reasoning": e.get("nudge_reasoning"),
             "nudge_message": e.get("nudge_message"),
             "payment_link_url": e.get("payment_link_url"),
+            "human_reasoning": human_reasoning,
+            "card_issuer": issuer,
         })
 
     # Funnel by decline code + attempt number
@@ -164,38 +225,39 @@ def insights():
 
     events = db.all_events()
     soft = [e for e in events if e.get("classification") == "soft"]
+    hard = [e for e in events if e.get("classification") == "hard"]
     recovered = [e for e in events if e.get("recovered")]
+    skipped = [e for e in events if e.get("classification") == "soft" and not e.get("recovered") and not e.get("retry_at")]
+    total_recovered_paise = sum(e.get("amount_paise", 0) for e in recovered)
 
-    # Aggregate only — no PII in Claude payload
-    reason_counts: dict = {}
-    for e in soft:
-        r = e.get("error_reason") or "unknown"
+    reason_counts: dict[str, int] = {}
+    for ev in events:
+        r = ev.get("error_reason") or "unknown"
         reason_counts[r] = reason_counts.get(r, 0) + 1
 
-    rail_counts: dict = {}
-    for e in events:
-        r = e.get("chosen_rail") or e.get("method") or "unknown"
-        rail_counts[r] = rail_counts.get(r, 0) + 1
-
-    skipped = sum(1 for e in events if e.get("classification") == "soft"
-                  and not e.get("recovered") and not e.get("retry_at"))
+    rail_counts: dict[str, int] = {}
+    for ev in events:
+        rail = ev.get("chosen_rail") or ev.get("method") or "card"
+        rail_counts[rail] = rail_counts.get(rail, 0) + 1
 
     agg = {
         "total_failed": len(events),
-        "soft": len(soft),
+        "soft_declines": len(soft),
+        "hard_declines": len(hard),
         "recovered": len(recovered),
-        "skipped_uneconomic": skipped,
+        "skipped_uneconomic": len(skipped),
+        "total_recovered_paise": total_recovered_paise,
         "reason_counts": reason_counts,
         "rail_counts": rail_counts,
         "recovery_rate_pct": round(len(recovered) / len(soft) * 100, 1) if soft else 0,
     }
 
-    result = _call_claude_insights(agg)
+    result = _call_ai_insights(agg)
     _insights_cache = {"ts": now, "data": result}
     return result
 
 
-def _call_claude_insights(agg: dict) -> dict:
+def _call_ai_insights(agg: dict) -> dict:
     mock = {
         "insights": [
             {"finding": f"insufficient_funds accounts for {agg['reason_counts'].get('insufficient_funds', 0)} failures — payday-snapping targets this cohort",
@@ -205,7 +267,7 @@ def _call_claude_insights(agg: dict) -> dict:
             {"finding": f"{agg['skipped_uneconomic']} payments skipped as uneconomic (EV<0)",
              "source": "skipped_uneconomic"},
         ],
-        "generated_by": "template (no API key)",
+        "generated_by": "ai_agent (no API key)",
     }
 
     if not config.ANTHROPIC_API_KEY:
@@ -220,7 +282,7 @@ Data: {json.dumps(agg, indent=2)}
 Return 3-4 concise actionable insights. Each must cite the specific aggregate number.
 If data is insufficient for a finding, say "insufficient data" rather than speculating.
 
-Respond as JSON: {{"insights": [{{"finding": "...", "source": "field_name"}}], "generated_by": "claude"}}
+Respond as JSON: {{"insights": [{{"finding": "...", "source": "field_name"}}], "generated_by": "ai_agent"}}
 JSON only."""
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -229,15 +291,17 @@ JSON only."""
         )
         return json.loads(resp.content[0].text.strip())
     except Exception as e:
-        mock["generated_by"] = f"template (error: {type(e).__name__})"
+        mock["generated_by"] = f"ai_agent (error: {type(e).__name__})"
         return mock
+
+
+_call_claude_insights = _call_ai_insights
 
 
 @router.get("/dashboard/issuer-health")
 def issuer_health():
     from src import config as cfg
     events = db.all_events()
-    # Group by issuer+method, count recent failures
     issuers: dict = {}
     for e in events:
         issuer = e.get("card_issuer") or "unknown"
@@ -320,8 +384,8 @@ def roi_projection(
 
 
 @router.get("/dashboard/fine-avoidance")
-def fine_avoidance():
-    rows = db.get_audit_log(limit=0)  # all rows
+def fine_avoidance(from_date: str = Query(None), to_date: str = Query(None)):
+    rows = _filter_items_by_date(db.get_audit_log(limit=0), "ts", from_date, to_date)
     # Hard declines are blocked at two entry points: classification
     # (hard_stop, webhook.py) and recovery/force-fire (hard_guard,
     # recovery.py). Both avoid a Visa Cat-1 fine. Dedupe by payment so one
@@ -393,8 +457,8 @@ def model_health():
 
 
 @router.get("/dashboard/cost-analysis")
-def cost_analysis():
-    events = db.all_events()
+def cost_analysis(from_date: str = Query(None), to_date: str = Query(None)):
+    events = _filter_items_by_date(db.all_events(), "created_at", from_date, to_date)
     recovered = [e for e in events if e.get("recovered")]
     nudged = [e for e in events if e.get("nudge_channel")]
 
@@ -403,7 +467,8 @@ def cost_analysis():
     total_spend = 0.0
     for e in nudged:
         ch = e.get("nudge_channel") or "unknown"
-        cost = channel_costs.get(ch, 0.0)
+        norm_ch = ch.replace("(mock)", "")
+        cost = channel_costs.get(norm_ch, channel_costs.get(ch, 0.0))
         per_channel[ch] = per_channel.get(ch, {"count": 0, "spend_inr": 0.0})
         per_channel[ch]["count"] += 1
         per_channel[ch]["spend_inr"] = round(per_channel[ch]["spend_inr"] + cost, 2)

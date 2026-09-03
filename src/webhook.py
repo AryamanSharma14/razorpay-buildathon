@@ -12,9 +12,11 @@ router = APIRouter()
 
 
 def _verify_sig(body: bytes, sig: str) -> bool:
+    if not config.RAZORPAY_WEBHOOK_SECRET or not sig:
+        return False
     secret = config.RAZORPAY_WEBHOOK_SECRET.encode()
     expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, sig or "")
+    return hmac.compare_digest(expected, sig)
 
 
 @router.post("/webhook/razorpay")
@@ -173,7 +175,7 @@ def _handle_downtime_resolved(payload: dict):
 def _handle_link_paid(payload: dict):
     entity = payload.get("payload", {}).get("payment_link", {}).get("entity", {})
     notes = entity.get("notes", {})
-    pid = notes.get("recovery_for")
+    pid = notes.get("recovery_for") or notes.get("payment_id")
     if not pid:
         return
 

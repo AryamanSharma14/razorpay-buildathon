@@ -250,7 +250,7 @@ def simulate(req: SimulateRequest):
 
 
 @router.post("/simulate/reset")
-def simulate_reset():
+def simulate_reset(reseed: bool = False):
     if not config.DEMO_MODE:
         return Response(status_code=403, content="Simulator is disabled outside DEMO_MODE")
     from src import scheduler as sched
@@ -258,5 +258,8 @@ def simulate_reset():
         job.remove()
     db.reset_db()
     events.clear()
+    if reseed:
+        from src.seed import seed_database
+        seed_database(force=True)
     return {"reset": True}
 
